@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>도서관리 시스템</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- 헤더 -->
+        <header class="header">
+            <h1><i class="fas fa-book"></i> 도서관리 시스템</h1>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="showAddBookModal()">
+                    <i class="fas fa-plus"></i> 새 도서 추가
+                </button>
+                <button class="btn btn-secondary" onclick="exportData()">
+                    <i class="fas fa-download"></i> 데이터 내보내기
+                </button>
+            </div>
+        </header>
+
+        <!-- 검색 및 필터 -->
+        <div class="search-section">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="도서명, 저자, 장르로 검색..." onkeyup="searchBooks()">
+            </div>
+            <div class="filters">
+                <select id="genreFilter" onchange="filterBooks()">
+                    <option value="">모든 장르</option>
+                    <option value="판타지">판타지</option>
+                    <option value="소설">소설</option>
+                    <option value="SF">SF</option>
+                    <option value="스릴러">스릴러</option>
+                    <option value="디스토피아">디스토피아</option>
+                    <option value="희곡">희곡</option>
+                    <option value="알레고리">알레고리</option>
+                    <option value="마술적 사실주의">마술적 사실주의</option>
+                </select>
+                <select id="sortBy" onchange="sortBooks()">
+                    <option value="title">도서명순</option>
+                    <option value="author">저자순</option>
+                    <option value="published_date">출판일순</option>
+                    <option value="price">가격순</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 통계 대시보드 -->
+        <div class="stats-dashboard">
+            <div class="stat-card">
+                <i class="fas fa-book"></i>
+                <div class="stat-info">
+                    <h3 id="totalBooks">0</h3>
+                    <p>총 도서 수</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-layer-group"></i>
+                <div class="stat-info">
+                    <h3 id="totalGenres">0</h3>
+                    <p>장르 수</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-boxes"></i>
+                <div class="stat-info">
+                    <h3 id="totalStock">0</h3>
+                    <p>총 재고</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-won-sign"></i>
+                <div class="stat-info">
+                    <h3 id="avgPrice">0</h3>
+                    <p>평균 가격</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 도서 목록 -->
+        <div class="books-section">
+            <div class="section-header">
+                <h2>도서 목록</h2>
+                <div class="view-toggle">
+                    <button class="btn btn-sm" onclick="toggleView('grid')" id="gridBtn">
+                        <i class="fas fa-th"></i>
+                    </button>
+                    <button class="btn btn-sm" onclick="toggleView('list')" id="listBtn">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="books-grid" id="booksContainer">
+                <!-- 도서 카드들이 여기에 동적으로 생성됩니다 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 도서 추가/수정 모달 -->
+    <div id="bookModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">새 도서 추가</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <form id="bookForm" onsubmit="saveBook(event)">
+                <div class="form-group">
+                    <label for="bookTitle">도서명 *</label>
+                    <input type="text" id="bookTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="bookAuthor">저자 *</label>
+                    <input type="text" id="bookAuthor" required>
+                </div>
+                <div class="form-group">
+                    <label for="bookIsbn">ISBN</label>
+                    <input type="text" id="bookIsbn">
+                </div>
+                <div class="form-group">
+                    <label for="bookPublishedDate">출판일</label>
+                    <input type="date" id="bookPublishedDate">
+                </div>
+                <div class="form-group">
+                    <label for="bookGenre">장르</label>
+                    <select id="bookGenre">
+                        <option value="">장르 선택</option>
+                        <option value="판타지">판타지</option>
+                        <option value="소설">소설</option>
+                        <option value="SF">SF</option>
+                        <option value="스릴러">스릴러</option>
+                        <option value="디스토피아">디스토피아</option>
+                        <option value="희곡">희곡</option>
+                        <option value="알레고리">알레고리</option>
+                        <option value="마술적 사실주의">마술적 사실주의</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="bookPages">페이지 수</label>
+                    <input type="number" id="bookPages" min="1">
+                </div>
+                <div class="form-group">
+                    <label for="bookLanguage">언어</label>
+                    <input type="text" id="bookLanguage" value="Korean">
+                </div>
+                <div class="form-group">
+                    <label for="bookDescription">설명</label>
+                    <textarea id="bookDescription" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="bookPrice">가격 (원)</label>
+                    <input type="number" id="bookPrice" min="0" step="100">
+                </div>
+                <div class="form-group">
+                    <label for="bookStock">재고 수량</label>
+                    <input type="number" id="bookStock" min="0" value="0">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">취소</button>
+                    <button type="submit" class="btn btn-primary">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 도서 상세 모달 -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="detailTitle">도서 상세 정보</h2>
+                <span class="close" onclick="closeDetailModal()">&times;</span>
+            </div>
+            <div id="detailContent">
+                <!-- 도서 상세 정보가 여기에 표시됩니다 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 로딩 스피너 -->
+    <div id="loadingSpinner" class="loading-spinner">
+        <div class="spinner"></div>
+        <p>데이터를 불러오는 중...</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="script.js"></script>
+</body>
+</html>
