@@ -16,11 +16,27 @@
                 <button class="btn btn-primary" onclick="showAddBookModal()">
                     <i class="fas fa-plus"></i> 새 도서 추가
                 </button>
+                <button class="btn btn-info" onclick="showLibraryModal()">
+                    <i class="fas fa-building"></i> 도서관 관리
+                </button>
                 <button class="btn btn-secondary" onclick="exportData()">
                     <i class="fas fa-download"></i> 데이터 내보내기
                 </button>
             </div>
         </header>
+
+        <!-- 도서관 선택 섹션 -->
+        <div class="library-selector">
+            <div class="library-info">
+                <h2><i class="fas fa-building"></i> 현재 도서관</h2>
+                <div class="current-library">
+                    <span id="currentLibraryName">도서관을 선택하세요</span>
+                    <button class="btn btn-sm btn-outline" onclick="showLibrarySelector()">
+                        <i class="fas fa-exchange-alt"></i> 변경
+                    </button>
+                </div>
+            </div>
+        </div>
 
         <!-- 검색 및 필터 -->
         <div class="search-section">
@@ -69,7 +85,7 @@
                 <i class="fas fa-boxes"></i>
                 <div class="stat-info">
                     <h3 id="totalStock">0</h3>
-                    <p>총 재고</p>
+                    <p>총 보유권수</p>
                 </div>
             </div>
             <div class="stat-card">
@@ -155,8 +171,8 @@
                     <input type="number" id="bookPrice" min="0" step="100">
                 </div>
                 <div class="form-group">
-                    <label for="bookStock">재고 수량</label>
-                    <input type="number" id="bookStock" min="0" value="0">
+                    <label for="bookStock">보유권수</label>
+                    <input type="number" id="bookStock" min="1" value="1">
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeModal()">취소</button>
@@ -175,6 +191,82 @@
             </div>
             <div id="detailContent">
                 <!-- 도서 상세 정보가 여기에 표시됩니다 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 도서관 관리 모달 -->
+    <div id="libraryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="libraryModalTitle">도서관 관리</h2>
+                <span class="close" onclick="closeLibraryModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="library-tabs">
+                    <button class="tab-btn active" onclick="showLibraryTab('list')" id="libraryListTabBtn">
+                        <i class="fas fa-list"></i> 도서관 목록
+                    </button>
+                    <button class="tab-btn" onclick="showLibraryTab('add')" id="libraryAddTabBtn">
+                        <i class="fas fa-plus"></i> 새 도서관 추가
+                    </button>
+                </div>
+                
+                <!-- 도서관 목록 탭 -->
+                <div id="libraryListTab" class="tab-content active">
+                    <div id="librariesList">
+                        <!-- 도서관 목록이 여기에 표시됩니다 -->
+                    </div>
+                </div>
+                
+                <!-- 새 도서관 추가 탭 -->
+                <div id="libraryAddTab" class="tab-content">
+                    <form id="libraryForm" onsubmit="saveLibrary(event)">
+                        <div class="form-group">
+                            <label for="libraryName">도서관명 *</label>
+                            <input type="text" id="libraryName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="libraryDescription">설명</label>
+                            <textarea id="libraryDescription" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="libraryAddress">주소</label>
+                            <input type="text" id="libraryAddress">
+                        </div>
+                        <div class="form-group">
+                            <label for="libraryPhone">전화번호</label>
+                            <input type="tel" id="libraryPhone">
+                        </div>
+                        <div class="form-group">
+                            <label for="libraryEmail">이메일</label>
+                            <input type="email" id="libraryEmail">
+                        </div>
+                        <div class="form-group">
+                            <label for="libraryWebsite">웹사이트</label>
+                            <input type="url" id="libraryWebsite">
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" onclick="closeLibraryModal()">취소</button>
+                            <button type="submit" class="btn btn-primary">저장</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 도서관 선택 모달 -->
+    <div id="librarySelectorModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>도서관 선택</h2>
+                <span class="close" onclick="closeLibrarySelector()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="librarySelectorList">
+                    <!-- 도서관 선택 목록이 여기에 표시됩니다 -->
+                </div>
             </div>
         </div>
     </div>

@@ -82,6 +82,27 @@ body {
     box-shadow: 0 5px 15px rgba(149, 165, 166, 0.4);
 }
 
+.btn-info {
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    color: white;
+}
+
+.btn-info:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(23, 162, 184, 0.4);
+}
+
+.btn-outline {
+    background: transparent;
+    border: 2px solid #3498db;
+    color: #3498db;
+}
+
+.btn-outline:hover {
+    background: #3498db;
+    color: white;
+}
+
 .btn-danger {
     background: linear-gradient(135deg, #e74c3c, #c0392b);
     color: white;
@@ -95,6 +116,41 @@ body {
 .btn-sm {
     padding: 8px 16px;
     font-size: 12px;
+}
+
+/* 도서관 선택 섹션 */
+.library-selector {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.library-info h2 {
+    color: #2c3e50;
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.current-library {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-radius: 10px;
+    border-left: 4px solid #3498db;
+}
+
+.current-library span {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2c3e50;
 }
 
 /* 검색 및 필터 섹션 */
@@ -269,6 +325,17 @@ body {
     margin-bottom: 15px;
 }
 
+.book-id {
+    font-size: 0.8rem;
+    color: #666;
+    font-weight: 600;
+    margin-bottom: 4px;
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
 .book-title {
     font-size: 1.2rem;
     font-weight: 600;
@@ -317,6 +384,128 @@ body {
 .book-actions .btn {
     padding: 8px 12px;
     font-size: 12px;
+}
+
+/* 탭 스타일 */
+.library-tabs {
+    display: flex;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #ecf0f1;
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    border: none;
+    background: transparent;
+    color: #7f8c8d;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tab-btn.active {
+    color: #3498db;
+    border-bottom-color: #3498db;
+}
+
+.tab-btn:hover {
+    color: #3498db;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* 도서관 카드 스타일 */
+.library-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.library-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    border-color: #3498db;
+}
+
+.library-card.current {
+    border-color: #27ae60;
+    background: linear-gradient(135deg, #f8fff8, #e8f5e8);
+}
+
+.library-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.library-name {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.library-description {
+    color: #7f8c8d;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.library-info {
+    margin-bottom: 15px;
+}
+
+.library-info p {
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: #555;
+}
+
+.library-info strong {
+    color: #2c3e50;
+}
+
+.library-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.library-selector-item {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.library-selector-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    border-color: #3498db;
+}
+
+.library-selector-item.current {
+    border-color: #27ae60;
+    background: linear-gradient(135deg, #f8fff8, #e8f5e8);
 }
 
 /* 모달 스타일 */

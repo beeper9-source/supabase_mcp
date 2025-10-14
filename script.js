@@ -15,15 +15,83 @@ const supabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
     },
 });
 
+// 보안 관련 함수들
+function simpleHash(str) {
+    let hash = 0;
+    if (str.length === 0) return hash;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // 32bit integer로 변환
+    }
+    return Math.abs(hash).toString();
+}
+
+// 암호화된 사번 (원본: 22331) - 소스코드에서 직접 확인 불가
+const ENCRYPTED_EMPLOYEE_ID = simpleHash('22331');
+
+// 추가 보안: 콘솔 로그 방지
+(function() {
+    const originalLog = console.log;
+    console.log = function(...args) {
+        if (args.some(arg => typeof arg === 'string' && arg.includes('22331'))) {
+            return; // 사번 관련 로그 차단
+        }
+        originalLog.apply(console, args);
+    };
+})();
+
+// 사번 검증 함수
+function verifyEmployeeId(inputId) {
+    return simpleHash(inputId) === ENCRYPTED_EMPLOYEE_ID;
+}
+
+// 추가 보안: 잘못된 시도 횟수 추적
+let failedAttempts = 0;
+const MAX_FAILED_ATTEMPTS = 3;
+const LOCKOUT_TIME = 30000; // 30초
+
+// 보안 검증 강화
+function verifyEmployeeIdSecure(inputId) {
+    // 잠금 상태 확인
+    if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+        showNotification('너무 많은 잘못된 시도로 인해 일시적으로 차단되었습니다. 잠시 후 다시 시도해주세요.', 'error');
+        return false;
+    }
+    
+    const isValid = verifyEmployeeId(inputId);
+    
+    if (!isValid) {
+        failedAttempts++;
+        if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
+            showNotification('보안상의 이유로 일시적으로 차단되었습니다. 30초 후 다시 시도해주세요.', 'error');
+            // 30초 후 잠금 해제
+            setTimeout(() => {
+                failedAttempts = 0;
+                showNotification('보안 잠금이 해제되었습니다.', 'success');
+            }, LOCKOUT_TIME);
+        }
+    } else {
+        // 성공 시 시도 횟수 리셋
+        failedAttempts = 0;
+    }
+    
+    return isValid;
+}
+
 // 전역 변수
 let books = [];
 let filteredBooks = [];
+let libraries = [];
+let currentLibraryId = null;
 let currentView = 'grid';
 let editingBookId = null;
+let editingBookLibraryId = null;
+let editingLibraryId = null;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-    loadBooks();
+    loadLibraries();
     setupEventListeners();
 });
 
@@ -51,14 +119,51 @@ function setupEventListeners() {
     });
 }
 
+// 도서관 목록 로드
+async function loadLibraries() {
+    try {
+        const { data, error } = await supabase
+            .from('libraries')
+            .select('*')
+            .order('name');
+
+        if (error) {
+            console.error('Error loading libraries:', error);
+            showNotification('도서관 목록을 불러오는데 실패했습니다.', 'error');
+            return;
+        }
+
+        libraries = data || [];
+        
+        // 첫 번째 도서관을 기본으로 선택
+        if (libraries.length > 0 && !currentLibraryId) {
+            currentLibraryId = libraries[0].id;
+            updateCurrentLibraryDisplay();
+            loadBooks();
+        } else if (libraries.length === 0) {
+            showNotification('도서관이 없습니다. 먼저 도서관을 추가해주세요.', 'warning');
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('도서관 목록을 불러오는데 실패했습니다.', 'error');
+    }
+}
+
 // 도서 목록 로드
 async function loadBooks() {
+    if (!currentLibraryId) {
+        showNotification('도서관을 선택해주세요.', 'warning');
+        return;
+    }
+    
     showLoading(true);
     
     try {
         const { data, error } = await supabase
             .from('books')
             .select('*')
+            .eq('library_id', currentLibraryId)
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -120,14 +225,15 @@ function createBookCard(book) {
     const price = book.price ? 
         new Intl.NumberFormat('ko-KR').format(book.price) + '원' : '미상';
     
-    const stockStatus = book.stock_quantity > 0 ? 
-        `<span style="color: #27ae60;">재고: ${book.stock_quantity}권</span>` : 
-        `<span style="color: #e74c3c;">품절</span>`;
+    const stockStatus = book.copies > 0 ? 
+        `<span style="color: #27ae60;">보유권수: ${book.copies}권</span>` : 
+        `<span style="color: #e74c3c;">보유권수 없음</span>`;
 
     return `
-        <div class="book-card ${currentView === 'list' ? 'list-view' : ''}" onclick="showBookDetail(${book.id})">
+        <div class="book-card ${currentView === 'list' ? 'list-view' : ''}" onclick="showBookDetail('${book.library_id}', '${book.id}')">
             <div class="book-header">
                 <div>
+                    <div class="book-id">ID: ${book.id}</div>
                     <div class="book-title">${escapeHtml(book.title)}</div>
                     <div class="book-author">${escapeHtml(book.author)}</div>
                 </div>
@@ -154,10 +260,10 @@ function createBookCard(book) {
             ` : ''}
             
             <div class="book-actions" onclick="event.stopPropagation()">
-                <button class="btn btn-sm btn-secondary" onclick="editBook(${book.id})">
+                <button class="btn btn-sm btn-secondary" onclick="editBook('${book.library_id}', '${book.id}')">
                     <i class="fas fa-edit"></i> 수정
                 </button>
-                <button class="btn btn-sm btn-danger" onclick="deleteBook(${book.id})">
+                <button class="btn btn-sm btn-danger" onclick="deleteBook('${book.library_id}', '${book.id}')">
                     <i class="fas fa-trash"></i> 삭제
                 </button>
             </div>
@@ -244,7 +350,7 @@ function toggleView(view) {
 function updateStats() {
     const totalBooks = books.length;
     const totalGenres = new Set(books.map(book => book.genre).filter(Boolean)).size;
-    const totalStock = books.reduce((sum, book) => sum + (book.stock_quantity || 0), 0);
+    const totalStock = books.reduce((sum, book) => sum + (book.copies || 0), 0);
     const avgPrice = books.length > 0 ? 
         Math.round(books.reduce((sum, book) => sum + (book.price || 0), 0) / books.length) : 0;
     
@@ -256,20 +362,27 @@ function updateStats() {
 
 // 새 도서 추가 모달 표시
 function showAddBookModal() {
+    if (!currentLibraryId) {
+        showNotification('먼저 도서관을 선택해주세요.', 'warning');
+        showLibrarySelector();
+        return;
+    }
+    
     editingBookId = null;
     document.getElementById('modalTitle').textContent = '새 도서 추가';
     document.getElementById('bookForm').reset();
     document.getElementById('bookLanguage').value = 'Korean';
-    document.getElementById('bookStock').value = '0';
+    document.getElementById('bookStock').value = '1';
     document.getElementById('bookModal').style.display = 'block';
 }
 
 // 도서 수정
-function editBook(id) {
-    const book = books.find(b => b.id === id);
+function editBook(libraryId, id) {
+    const book = books.find(b => b.library_id === libraryId && b.id === id);
     if (!book) return;
     
     editingBookId = id;
+    editingBookLibraryId = libraryId;
     document.getElementById('modalTitle').textContent = '도서 수정';
     
     // 폼에 기존 데이터 채우기
@@ -282,7 +395,7 @@ function editBook(id) {
     document.getElementById('bookLanguage').value = book.language || 'Korean';
     document.getElementById('bookDescription').value = book.description || '';
     document.getElementById('bookPrice').value = book.price || '';
-    document.getElementById('bookStock').value = book.stock_quantity || 0;
+    document.getElementById('bookStock').value = book.copies || 1;
     
     document.getElementById('bookModal').style.display = 'block';
 }
@@ -328,8 +441,8 @@ async function saveBook(event) {
         return;
     }
     
-    if (stock && (isNaN(stock) || parseInt(stock) < 0)) {
-        showNotification('재고 수량은 0 이상의 숫자여야 합니다.', 'error');
+    if (stock && (isNaN(stock) || parseInt(stock) < 1)) {
+        showNotification('보유권수는 1 이상의 숫자여야 합니다.', 'error');
         document.getElementById('bookStock').focus();
         return;
     }
@@ -351,7 +464,9 @@ async function saveBook(event) {
         language: language || 'Korean',
         description: description || null,
         price: price ? parseFloat(price) : null,
-        stock_quantity: stock ? parseInt(stock) : 0
+        copies: stock ? parseInt(stock) : 1,
+        library_id: currentLibraryId
+        // id는 데이터베이스 트리거에서 자동 생성됨
     };
     
     try {
@@ -362,6 +477,7 @@ async function saveBook(event) {
             result = await supabase
                 .from('books')
                 .update(formData)
+                .eq('library_id', editingBookLibraryId)
                 .eq('id', editingBookId);
         } else {
             // 추가
@@ -404,7 +520,7 @@ async function saveBook(event) {
 }
 
 // 도서 삭제
-async function deleteBook(id) {
+async function deleteBook(libraryId, id) {
     if (!confirm('정말로 이 도서를 삭제하시겠습니까?')) {
         return;
     }
@@ -413,6 +529,7 @@ async function deleteBook(id) {
         const { error } = await supabase
             .from('books')
             .delete()
+            .eq('library_id', libraryId)
             .eq('id', id);
         
         if (error) {
@@ -431,8 +548,8 @@ async function deleteBook(id) {
 }
 
 // 도서 상세 정보 표시
-function showBookDetail(id) {
-    const book = books.find(b => b.id === id);
+function showBookDetail(libraryId, id) {
+    const book = books.find(b => b.library_id === libraryId && b.id === id);
     if (!book) return;
     
     const publishedDate = book.published_date ? 
@@ -447,6 +564,9 @@ function showBookDetail(id) {
     document.getElementById('detailContent').innerHTML = `
         <div style="padding: 30px;">
             <div style="text-align: center; margin-bottom: 30px;">
+                <div style="background: #e3f2fd; color: #1976d2; padding: 8px 16px; border-radius: 20px; display: inline-block; margin-bottom: 15px; font-weight: 600;">
+                    ID: ${book.id}
+                </div>
                 <h1 style="color: #2c3e50; margin-bottom: 10px;">${escapeHtml(book.title)}</h1>
                 <h2 style="color: #7f8c8d; font-weight: 400;">${escapeHtml(book.author)}</h2>
                 <div style="margin-top: 15px;">
@@ -472,8 +592,8 @@ function showBookDetail(id) {
                     ${price}
                 </div>
                 <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
-                    <strong>재고</strong><br>
-                    ${book.stock_quantity || 0}권
+                    <strong>보유권수</strong><br>
+                    ${book.copies || 0}권
                 </div>
                 ${book.isbn ? `
                     <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
@@ -496,10 +616,10 @@ function showBookDetail(id) {
             </div>
             
             <div style="margin-top: 30px; text-align: center;">
-                <button class="btn btn-primary" onclick="editBook(${book.id}); closeDetailModal();">
+                <button class="btn btn-primary" onclick="editBook('${book.library_id}', '${book.id}'); closeDetailModal();">
                     <i class="fas fa-edit"></i> 수정
                 </button>
-                <button class="btn btn-danger" onclick="deleteBook(${book.id}); closeDetailModal();" style="margin-left: 10px;">
+                <button class="btn btn-danger" onclick="deleteBook('${book.library_id}', '${book.id}'); closeDetailModal();" style="margin-left: 10px;">
                     <i class="fas fa-trash"></i> 삭제
                 </button>
             </div>
@@ -513,6 +633,7 @@ function showBookDetail(id) {
 function closeModal() {
     document.getElementById('bookModal').style.display = 'none';
     editingBookId = null;
+    editingBookLibraryId = null;
 }
 
 function closeDetailModal() {
@@ -538,7 +659,7 @@ function exportData() {
 
 // CSV 생성
 function generateCSV(data) {
-    const headers = ['ID', '도서명', '저자', 'ISBN', '출판일', '장르', '페이지', '언어', '설명', '가격', '재고', '등록일'];
+    const headers = ['ID', '도서명', '저자', 'ISBN', '출판일', '장르', '페이지', '언어', '설명', '가격', '보유권수', '등록일'];
     const csvRows = [headers.join(',')];
     
     data.forEach(book => {
@@ -553,7 +674,7 @@ function generateCSV(data) {
             `"${book.language || ''}"`,
             `"${(book.description || '').replace(/"/g, '""')}"`,
             book.price || '',
-            book.stock_quantity || 0,
+            book.copies || 0,
             book.created_at
         ];
         csvRows.push(row.join(','));
@@ -610,6 +731,390 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// 도서관 관련 함수들
+
+// 현재 도서관 표시 업데이트
+function updateCurrentLibraryDisplay() {
+    const currentLibrary = libraries.find(lib => lib.id === currentLibraryId);
+    const displayElement = document.getElementById('currentLibraryName');
+    
+    if (currentLibrary) {
+        displayElement.textContent = currentLibrary.name;
+    } else {
+        displayElement.textContent = '도서관을 선택하세요';
+    }
+}
+
+// 도서관 관리 모달 표시
+function showLibraryModal() {
+    // 모달 제목을 기본값으로 설정
+    document.getElementById('libraryModalTitle').textContent = '도서관 관리';
+    
+    // 수정 모드 초기화
+    editingLibraryId = null;
+    
+    document.getElementById('libraryModal').style.display = 'block';
+    loadLibrariesList();
+}
+
+// 도서관 모달 닫기
+function closeLibraryModal() {
+    document.getElementById('libraryModal').style.display = 'none';
+    editingLibraryId = null;
+}
+
+// 도서관 탭 전환
+function showLibraryTab(tab) {
+    // 모든 탭 버튼과 콘텐츠 비활성화
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    
+    // 선택된 탭 활성화
+    if (tab === 'list') {
+        document.getElementById('libraryListTabBtn').classList.add('active');
+        document.getElementById('libraryListTab').classList.add('active');
+        loadLibrariesList();
+    } else if (tab === 'add') {
+        document.getElementById('libraryAddTabBtn').classList.add('active');
+        document.getElementById('libraryAddTab').classList.add('active');
+        // 수정 모드가 아닐 때만 폼 리셋
+        if (!editingLibraryId) {
+            resetLibraryForm();
+        }
+    }
+}
+
+// 도서관 목록 로드 및 표시
+async function loadLibrariesList() {
+    const container = document.getElementById('librariesList');
+    
+    if (libraries.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+                <i class="fas fa-building" style="font-size: 3rem; margin-bottom: 20px; opacity: 0.5;"></i>
+                <h3>도서관이 없습니다</h3>
+                <p>새로운 도서관을 추가해보세요!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = libraries.map(library => createLibraryCard(library)).join('');
+}
+
+// 도서관 카드 생성
+function createLibraryCard(library) {
+    const isCurrent = library.id === currentLibraryId;
+    
+    return `
+        <div class="library-card ${isCurrent ? 'current' : ''}">
+            <div class="library-header">
+                <div>
+                    <div class="library-name">${escapeHtml(library.name)}</div>
+                    ${library.description ? `<div class="library-description">${escapeHtml(library.description)}</div>` : ''}
+                </div>
+                ${isCurrent ? '<span style="color: #27ae60; font-weight: 600;"><i class="fas fa-check-circle"></i> 현재</span>' : ''}
+            </div>
+            
+            <div class="library-info">
+                ${library.address ? `<p><strong>주소:</strong> ${escapeHtml(library.address)}</p>` : ''}
+                ${library.phone ? `<p><strong>전화:</strong> ${escapeHtml(library.phone)}</p>` : ''}
+                ${library.email ? `<p><strong>이메일:</strong> ${escapeHtml(library.email)}</p>` : ''}
+                ${library.website ? `<p><strong>웹사이트:</strong> <a href="${escapeHtml(library.website)}" target="_blank">${escapeHtml(library.website)}</a></p>` : ''}
+            </div>
+            
+            <div class="library-actions">
+                ${!isCurrent ? `<button class="btn btn-sm btn-primary" onclick="selectLibrary(${library.id})">
+                    <i class="fas fa-check"></i> 선택
+                </button>` : ''}
+                <button class="btn btn-sm btn-secondary" onclick="editLibrary(${library.id})">
+                    <i class="fas fa-edit"></i> 수정
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteLibrary(${library.id})">
+                    <i class="fas fa-trash"></i> 삭제
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// 도서관 선택
+async function selectLibrary(libraryId) {
+    currentLibraryId = libraryId;
+    updateCurrentLibraryDisplay();
+    closeLibraryModal();
+    loadBooks();
+    showNotification('도서관이 변경되었습니다.', 'success');
+}
+
+// 도서관 선택 모달 표시
+function showLibrarySelector() {
+    document.getElementById('librarySelectorModal').style.display = 'block';
+    loadLibrarySelector();
+}
+
+// 도서관 선택 모달 닫기
+function closeLibrarySelector() {
+    document.getElementById('librarySelectorModal').style.display = 'none';
+}
+
+// 도서관 선택 목록 로드
+function loadLibrarySelector() {
+    const container = document.getElementById('librarySelectorList');
+    
+    if (libraries.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+                <i class="fas fa-building" style="font-size: 3rem; margin-bottom: 20px; opacity: 0.5;"></i>
+                <h3>도서관이 없습니다</h3>
+                <p>먼저 도서관을 추가해주세요.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = libraries.map(library => `
+        <div class="library-selector-item ${library.id === currentLibraryId ? 'current' : ''}" 
+             onclick="selectLibrary(${library.id}); closeLibrarySelector();">
+            <div class="library-name">${escapeHtml(library.name)}</div>
+            ${library.description ? `<div class="library-description">${escapeHtml(library.description)}</div>` : ''}
+            ${library.id === currentLibraryId ? '<span style="color: #27ae60; font-weight: 600;"><i class="fas fa-check-circle"></i> 현재</span>' : ''}
+        </div>
+    `).join('');
+}
+
+// 도서관 수정
+function editLibrary(id) {
+    const library = libraries.find(l => l.id === id);
+    if (!library) return;
+    
+    editingLibraryId = id;
+    
+    // 모달 제목 업데이트
+    document.getElementById('libraryModalTitle').textContent = '도서관 수정';
+    
+    // 추가 탭으로 전환
+    showLibraryTab('add');
+    
+    // 폼에 기존 데이터 채우기
+    document.getElementById('libraryName').value = library.name || '';
+    document.getElementById('libraryDescription').value = library.description || '';
+    document.getElementById('libraryAddress').value = library.address || '';
+    document.getElementById('libraryPhone').value = library.phone || '';
+    document.getElementById('libraryEmail').value = library.email || '';
+    document.getElementById('libraryWebsite').value = library.website || '';
+}
+
+// 도서관 저장
+async function saveLibrary(event) {
+    event.preventDefault();
+    
+    const formData = {
+        name: document.getElementById('libraryName').value.trim(),
+        description: document.getElementById('libraryDescription').value.trim(),
+        address: document.getElementById('libraryAddress').value.trim(),
+        phone: document.getElementById('libraryPhone').value.trim(),
+        email: document.getElementById('libraryEmail').value.trim(),
+        website: document.getElementById('libraryWebsite').value.trim()
+    };
+    
+    // 필수 필드 검증
+    if (!formData.name) {
+        showNotification('도서관명을 입력해주세요.', 'error');
+        document.getElementById('libraryName').focus();
+        return;
+    }
+    
+    try {
+        let result;
+        
+        if (editingLibraryId) {
+            // 수정
+            console.log('수정 모드 - Library ID:', editingLibraryId);
+            result = await supabase
+                .from('libraries')
+                .update(formData)
+                .eq('id', editingLibraryId);
+        } else {
+            // 추가
+            console.log('추가 모드');
+            result = await supabase
+                .from('libraries')
+                .insert([formData]);
+        }
+        
+        if (result.error) {
+            console.error('Error saving library:', result.error);
+            showNotification('도서관 저장에 실패했습니다.', 'error');
+            return;
+        }
+        
+        showNotification(
+            editingLibraryId ? '도서관이 수정되었습니다.' : '새 도서관이 추가되었습니다.', 
+            'success'
+        );
+        
+        closeLibraryModal();
+        loadLibraries();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('도서관 저장에 실패했습니다.', 'error');
+    }
+}
+
+// 도서관 삭제
+// 도서관 삭제 (사번 입력 필요)
+async function deleteLibrary(id) {
+    // 사번 입력 모달 표시
+    showEmployeeIdModal(id);
+}
+
+// 사번 입력 모달 표시
+function showEmployeeIdModal(libraryId) {
+    const modal = document.createElement('div');
+    modal.id = 'employeeIdModal';
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-shield-alt"></i> 보안 확인</h2>
+                <span class="close" onclick="closeEmployeeIdModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 48px; color: #e74c3c; margin-bottom: 15px;"></i>
+                    <h3 style="color: #e74c3c; margin-bottom: 10px;">도서관 삭제</h3>
+                    <p style="color: #666; margin-bottom: 20px;">
+                        도서관을 삭제하려면 관리자 사번을 입력해주세요.<br>
+                        <strong>삭제된 도서관의 모든 도서도 함께 삭제됩니다.</strong>
+                    </p>
+                </div>
+                <div class="form-group">
+                    <label for="employeeIdInput">관리자 사번</label>
+                    <input type="password" id="employeeIdInput" placeholder="사번을 입력하세요" style="text-align: center; font-size: 18px; letter-spacing: 2px;" maxlength="10">
+                    <div id="attemptCounter" style="text-align: center; margin-top: 10px; font-size: 12px; color: #666;">
+                        남은 시도 횟수: ${MAX_FAILED_ATTEMPTS - failedAttempts}
+                    </div>
+                </div>
+                <div class="form-actions" style="text-align: center; margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeEmployeeIdModal()">취소</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmDeleteLibrary('${libraryId}')">
+                        <i class="fas fa-trash"></i> 삭제 확인
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // 입력 필드에 포커스
+    setTimeout(() => {
+        document.getElementById('employeeIdInput').focus();
+    }, 100);
+    
+    // Enter 키 이벤트 리스너
+    document.getElementById('employeeIdInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            confirmDeleteLibrary(libraryId);
+        }
+    });
+    
+    // 입력 시 시도 횟수 업데이트
+    document.getElementById('employeeIdInput').addEventListener('input', function() {
+        updateAttemptCounter();
+    });
+}
+
+// 시도 횟수 표시 업데이트
+function updateAttemptCounter() {
+    const counter = document.getElementById('attemptCounter');
+    if (counter) {
+        const remaining = MAX_FAILED_ATTEMPTS - failedAttempts;
+        counter.textContent = `남은 시도 횟수: ${remaining}`;
+        counter.style.color = remaining <= 1 ? '#e74c3c' : '#666';
+    }
+}
+
+// 사번 입력 모달 닫기
+function closeEmployeeIdModal() {
+    const modal = document.getElementById('employeeIdModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 도서관 삭제 확인
+async function confirmDeleteLibrary(libraryId) {
+    const inputId = document.getElementById('employeeIdInput').value.trim();
+    
+    if (!inputId) {
+        showNotification('사번을 입력해주세요.', 'error');
+        document.getElementById('employeeIdInput').focus();
+        return;
+    }
+    
+    if (!verifyEmployeeIdSecure(inputId)) {
+        showNotification('올바른 사번을 입력해주세요.', 'error');
+        document.getElementById('employeeIdInput').value = '';
+        document.getElementById('employeeIdInput').focus();
+        return;
+    }
+    
+    // 사번이 올바른 경우 모달 닫기
+    closeEmployeeIdModal();
+    
+    // 실제 삭제 진행
+    try {
+        const { error } = await supabase
+            .from('libraries')
+            .delete()
+            .eq('id', libraryId);
+        
+        if (error) {
+            console.error('Error deleting library:', error);
+            showNotification('도서관 삭제에 실패했습니다.', 'error');
+            return;
+        }
+        
+        showNotification('도서관이 삭제되었습니다.', 'success');
+        
+        // 현재 선택된 도서관이 삭제된 경우 첫 번째 도서관 선택
+        if (currentLibraryId === libraryId) {
+            libraries = libraries.filter(l => l.id !== libraryId);
+            if (libraries.length > 0) {
+                currentLibraryId = libraries[0].id;
+                updateCurrentLibraryDisplay();
+                loadBooks();
+            } else {
+                currentLibraryId = null;
+                updateCurrentLibraryDisplay();
+                books = [];
+                filteredBooks = [];
+                renderBooks();
+                updateStats();
+            }
+        }
+        
+        loadLibraries();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('도서관 삭제에 실패했습니다.', 'error');
+    }
+}
+
+// 도서관 폼 리셋
+function resetLibraryForm() {
+    document.getElementById('libraryForm').reset();
+    editingLibraryId = null;
+    // 모달 제목도 기본값으로 리셋
+    document.getElementById('libraryModalTitle').textContent = '도서관 관리';
 }
 
 // CSS 애니메이션 추가
