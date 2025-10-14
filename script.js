@@ -266,17 +266,67 @@ function editBook(id) {
 async function saveBook(event) {
     event.preventDefault();
     
+    // 폼 데이터 수집 및 검증
+    const title = document.getElementById('bookTitle').value.trim();
+    const author = document.getElementById('bookAuthor').value.trim();
+    const isbn = document.getElementById('bookIsbn').value.trim();
+    const publishedDate = document.getElementById('bookPublishedDate').value;
+    const genre = document.getElementById('bookGenre').value;
+    const pages = document.getElementById('bookPages').value;
+    const language = document.getElementById('bookLanguage').value.trim();
+    const description = document.getElementById('bookDescription').value.trim();
+    const price = document.getElementById('bookPrice').value;
+    const stock = document.getElementById('bookStock').value;
+    
+    // 필수 필드 검증
+    if (!title) {
+        showNotification('도서명을 입력해주세요.', 'error');
+        document.getElementById('bookTitle').focus();
+        return;
+    }
+    if (!author) {
+        showNotification('저자를 입력해주세요.', 'error');
+        document.getElementById('bookAuthor').focus();
+        return;
+    }
+    
+    // 숫자 필드 검증
+    if (pages && (isNaN(pages) || parseInt(pages) < 1)) {
+        showNotification('페이지 수는 1 이상의 숫자여야 합니다.', 'error');
+        document.getElementById('bookPages').focus();
+        return;
+    }
+    
+    if (price && (isNaN(price) || parseFloat(price) < 0)) {
+        showNotification('가격은 0 이상의 숫자여야 합니다.', 'error');
+        document.getElementById('bookPrice').focus();
+        return;
+    }
+    
+    if (stock && (isNaN(stock) || parseInt(stock) < 0)) {
+        showNotification('재고 수량은 0 이상의 숫자여야 합니다.', 'error');
+        document.getElementById('bookStock').focus();
+        return;
+    }
+    
+    // ISBN 형식 검증 (선택사항)
+    if (isbn && !/^[\d-]+$/.test(isbn)) {
+        showNotification('ISBN은 숫자와 하이픈(-)만 입력 가능합니다.', 'error');
+        document.getElementById('bookIsbn').focus();
+        return;
+    }
+    
     const formData = {
-        title: document.getElementById('bookTitle').value.trim(),
-        author: document.getElementById('bookAuthor').value.trim(),
-        isbn: document.getElementById('bookIsbn').value.trim(),
-        published_date: document.getElementById('bookPublishedDate').value,
-        genre: document.getElementById('bookGenre').value,
-        pages: parseInt(document.getElementById('bookPages').value) || null,
-        language: document.getElementById('bookLanguage').value.trim(),
-        description: document.getElementById('bookDescription').value.trim(),
-        price: parseFloat(document.getElementById('bookPrice').value) || null,
-        stock_quantity: parseInt(document.getElementById('bookStock').value) || 0
+        title: title,
+        author: author,
+        isbn: isbn || null,
+        published_date: publishedDate || null,
+        genre: genre || null,
+        pages: pages ? parseInt(pages) : null,
+        language: language || 'Korean',
+        description: description || null,
+        price: price ? parseFloat(price) : null,
+        stock_quantity: stock ? parseInt(stock) : 0
     };
     
     try {
@@ -297,7 +347,20 @@ async function saveBook(event) {
         
         if (result.error) {
             console.error('Error saving book:', result.error);
-            showNotification('도서 저장에 실패했습니다.', 'error');
+            
+            // 구체적인 오류 메시지 표시
+            let errorMessage = '도서 저장에 실패했습니다.';
+            if (result.error.message) {
+                if (result.error.message.includes('duplicate key')) {
+                    errorMessage = '이미 존재하는 ISBN입니다.';
+                } else if (result.error.message.includes('invalid input syntax')) {
+                    errorMessage = '입력된 데이터 형식이 올바르지 않습니다.';
+                } else {
+                    errorMessage = result.error.message;
+                }
+            }
+            
+            showNotification(errorMessage, 'error');
             return;
         }
         
@@ -311,7 +374,7 @@ async function saveBook(event) {
         
     } catch (error) {
         console.error('Error:', error);
-        showNotification('도서 저장에 실패했습니다.', 'error');
+        showNotification('도서 저장에 실패했습니다: ' + error.message, 'error');
     }
 }
 
