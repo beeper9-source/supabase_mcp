@@ -47,3 +47,4 @@ INSERT INTO books (title, author, isbn, published_date, genre, pages, language, 
 -- 테이블 생성 확인
 SELECT 'books 테이블이 성공적으로 생성되었습니다!' as message;
 SELECT COUNT(*) as total_books FROM books;
+
