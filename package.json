@@ -1,16 +1,23 @@
 {
   "name": "supabase_mcp",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "도서관리 시스템 - Supabase를 활용한 웹 기반 도서 관리 시스템",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
+    "dev": "python -m http.server 8000",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/beeper9-source/supabase_mcp.git"
   },
-  "keywords": [],
+  "keywords": [
+    "도서관리",
+    "supabase",
+    "웹앱",
+    "CRUD"
+  ],
   "author": "",
   "license": "ISC",
   "bugs": {
@@ -18,6 +25,7 @@
   },
   "homepage": "https://github.com/beeper9-source/supabase_mcp#readme",
   "dependencies": {
-    "@supabase/mcp-server-supabase": "^0.5.6"
+    "@supabase/mcp-server-supabase": "^0.5.6",
+    "express": "^4.21.2"
   }
 }

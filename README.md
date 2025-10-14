@@ -51,22 +51,29 @@ const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
 
 ### 3. 웹 서버 실행
 
+#### 로컬 개발용 (Python)
 ```bash
-# Python 3를 사용한 간단한 웹 서버
 python -m http.server 8000
+```
 
-# 또는 Node.js를 사용한 경우
-npx serve .
+#### 프로덕션 서버용 (Node.js + Express)
+```bash
+# Express 서버 실행 (CORS 설정 포함)
+npm start
 
-# 또는 PHP를 사용한 경우
-php -S localhost:8000
+# 또는 직접 실행
+node server.js
+```
+
+#### 개발용 서버
+```bash
+npm run dev
 ```
 
 ### 4. 브라우저에서 접속
 
-```
-http://localhost:8000
-```
+- **로컬 개발**: `http://localhost:8000`
+- **프로덕션 서버**: `http://localhost:3000`
 
 ## 📁 프로젝트 구조
 
@@ -146,7 +153,43 @@ CREATE TABLE books (
 1. `index.html`의 장르 선택 옵션에 추가
 2. `script.js`의 필터 옵션에 추가
 
+## 🚀 서버 배포
+
+### Heroku 배포
+```bash
+# Heroku CLI 설치 후
+heroku create your-app-name
+git push heroku main
+```
+
+### Vercel 배포
+```bash
+# Vercel CLI 설치 후
+vercel --prod
+```
+
+### Netlify 배포
+1. Netlify에 프로젝트 업로드
+2. 빌드 명령어: `npm start`
+3. 배포 완료
+
+### Docker 배포
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
 ## 🐛 문제 해결
+
+### 401 Unauthorized 오류
+1. **RLS 정책 확인**: Supabase에서 Row Level Security가 올바르게 설정되었는지 확인
+2. **API 키 확인**: 올바른 anon key가 사용되고 있는지 확인
+3. **CORS 설정**: 서버에서 CORS 헤더가 올바르게 설정되었는지 확인
 
 ### Supabase 연결 오류
 1. URL과 API 키가 올바른지 확인
@@ -157,6 +200,11 @@ CREATE TABLE books (
 1. Supabase 테이블에 데이터가 있는지 확인
 2. RLS (Row Level Security) 설정 확인
 3. 네트워크 연결 상태 확인
+
+### 서버 배포 오류
+1. **CORS 오류**: Express 서버 사용 (`npm start`)
+2. **포트 오류**: 환경 변수 PORT 설정 확인
+3. **의존성 오류**: `npm install` 실행
 
 ## 📝 라이선스
 

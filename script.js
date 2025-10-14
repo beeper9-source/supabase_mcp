@@ -2,7 +2,18 @@
 const supabaseUrl = 'https://nqwjvrznwzmfytjlpfsk.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xd2p2cnpud3ptZnl0amxwZnNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzNzA4NTEsImV4cCI6MjA3Mzk0Njg1MX0.R3Y2Xb9PmLr3sCLSdJov4Mgk1eAmhaCIPXEKq6u8NQI';
 
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
+    auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false
+    },
+    global: {
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    },
+});
 
 // 전역 변수
 let books = [];
@@ -52,7 +63,21 @@ async function loadBooks() {
 
         if (error) {
             console.error('Error loading books:', error);
-            showNotification('도서 목록을 불러오는데 실패했습니다.', 'error');
+            
+            let errorMessage = '도서 목록을 불러오는데 실패했습니다.';
+            if (error.message) {
+                if (error.message.includes('401')) {
+                    errorMessage = '인증 오류가 발생했습니다. 페이지를 새로고침해주세요.';
+                } else if (error.message.includes('403')) {
+                    errorMessage = '접근 권한이 없습니다. 관리자에게 문의하세요.';
+                } else if (error.message.includes('CORS')) {
+                    errorMessage = 'CORS 오류가 발생했습니다. 서버 설정을 확인하세요.';
+                } else {
+                    errorMessage = `오류: ${error.message}`;
+                }
+            }
+            
+            showNotification(errorMessage, 'error');
             return;
         }
 
