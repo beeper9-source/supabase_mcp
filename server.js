@@ -19,36 +19,23 @@ app.use((req, res, next) => {
     }
 });
 
-// ISBN 검색 API 프록시 (하이브리드: 외부 API + 내장 더미 데이터)
+// ISBN 검색 API 프록시 (간단한 더미 데이터 방식)
 app.get('/api/isbn/:isbn', (req, res) => {
     const { isbn } = req.params;
-    let responseSent = false;
     
-    // 응답 전송 함수 (중복 전송 방지)
-    const sendResponse = (data, statusCode = 200) => {
-        if (!responseSent) {
-            responseSent = true;
-            if (statusCode === 200) {
-                res.json(data);
-            } else {
-                res.status(statusCode).json(data);
-            }
-        }
-    };
-    
-    // ISBN 형식 검증 (더 관대한 패턴)
+    // ISBN 형식 검증
     if (!/^[\d\-]+$/.test(isbn)) {
-        return sendResponse({ error: 'Invalid ISBN format' }, 400);
+        return res.status(400).json({ error: 'Invalid ISBN format' });
     }
     
     const cleanIsbn = isbn.replace(/-/g, '');
     
     if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
-        return sendResponse({ error: 'ISBN must be 10 or 13 digits' }, 400);
+        return res.status(400).json({ error: 'ISBN must be 10 or 13 digits' });
     }
     
-    // 내장 더미 데이터 (백업용)
-    const fallbackBooks = {
+    // 더미 도서 데이터
+    const dummyBooks = {
         '9788960543386': {
             title: '김승옥 단편선',
             author: '김승옥',
@@ -86,171 +73,22 @@ app.get('/api/isbn/:isbn', (req, res) => {
         }
     };
     
-    // 외부 API 시도 (타임아웃 설정)
-    const timeout = 2000; // 2초 타임아웃 (더 빠른 응답)
-    
-    // 국립중앙도서관 API 시도
-    const nlApiUrl = `https://www.nl.go.kr/NL/search/openApi/search.do?key=test&detailSearch=true&isbn=${cleanIsbn}&format=json`;
-    
-    const nlRequest = https.get(nlApiUrl, { timeout }, (response) => {
-        let data = '';
-        
-        response.on('data', (chunk) => {
-            data += chunk;
-        });
-        
-        response.on('end', () => {
-            try {
-                const nlData = JSON.parse(data);
-                
-                if (nlData && nlData.result && nlData.result.length > 0) {
-                    const book = nlData.result[0];
-                    
-                    const result = {
-                        title: book.title || '',
-                        author: book.author || '',
-                        publishDate: book.pub_date || '',
-                        pages: book.page || '',
-                        description: book.description || ''
-                    };
-                    
-                    console.log(`ISBN ${cleanIsbn}: 국립중앙도서관 API 성공`);
-                    return sendResponse(result);
-                }
-                
-                // 국립중앙도서관에서 찾지 못한 경우 Open Library 시도
-                tryOpenLibrary(cleanIsbn, sendResponse, fallbackBooks);
-                
-            } catch (error) {
-                console.log('NL API parse error:', error.message);
-                // 국립중앙도서관 실패 시 Open Library 시도
-                tryOpenLibrary(cleanIsbn, sendResponse, fallbackBooks);
-            }
-        });
-        
-    });
-    
-    nlRequest.on('error', (error) => {
-        console.log('NL API error:', error.message);
-        // 국립중앙도서관 실패 시 Open Library 시도
-        tryOpenLibrary(cleanIsbn, sendResponse, fallbackBooks);
-    });
-    
-    nlRequest.on('timeout', () => {
-        console.log('NL API timeout');
-        nlRequest.destroy();
-        tryOpenLibrary(cleanIsbn, sendResponse, fallbackBooks);
-    });
-});
-
-// Open Library API 시도 함수
-function tryOpenLibrary(isbn, sendResponse, fallbackBooks) {
-    const url = `https://openlibrary.org/isbn/${isbn}.json`;
-    const timeout = 2000; // 2초 타임아웃
-    
-    const olRequest = https.get(url, { timeout }, (response) => {
-        let data = '';
-        
-        response.on('data', (chunk) => {
-            data += chunk;
-        });
-        
-        response.on('end', async () => {
-            try {
-                const bookData = JSON.parse(data);
-                
-                if (!bookData.title) {
-                    // Open Library에서도 찾지 못한 경우 더미 데이터 시도
-                    return tryFallbackData(isbn, sendResponse, fallbackBooks);
-                }
-                
-                // 저자 정보 가져오기 (간소화)
-                let authorName = '';
-                if (bookData.authors && bookData.authors.length > 0) {
-                    try {
-                        const authorUrl = `https://openlibrary.org${bookData.authors[0].key}.json`;
-                        const authorData = await new Promise((resolve, reject) => {
-                            const authorRequest = https.get(authorUrl, { timeout: 1500 }, (authorResponse) => {
-                                let authorData = '';
-                                authorResponse.on('data', (chunk) => {
-                                    authorData += chunk;
-                                });
-                                authorResponse.on('end', () => {
-                                    try {
-                                        resolve(JSON.parse(authorData));
-                                    } catch (error) {
-                                        reject(error);
-                                    }
-                                });
-                            });
-                            authorRequest.on('error', reject);
-                            authorRequest.on('timeout', () => {
-                                authorRequest.destroy();
-                                reject(new Error('Author API timeout'));
-                            });
-                        });
-                        authorName = authorData.name || '';
-                    } catch (error) {
-                        console.log('Author fetch failed:', error.message);
-                    }
-                }
-                
-                // 응답 데이터 구성
-                const result = {
-                    title: bookData.title || '',
-                    author: authorName,
-                    publishDate: bookData.publish_date || '',
-                    pages: bookData.number_of_pages || '',
-                    description: ''
-                };
-                
-                // 설명 처리
-                if (bookData.description) {
-                    if (typeof bookData.description === 'string') {
-                        result.description = bookData.description;
-                    } else if (bookData.description.value) {
-                        result.description = bookData.description.value;
-                    }
-                }
-                
-                console.log(`ISBN ${isbn}: Open Library API 성공`);
-                sendResponse(result);
-                
-            } catch (error) {
-                console.error('Open Library JSON parse error:', error);
-                // 파싱 실패 시 더미 데이터 시도
-                tryFallbackData(isbn, sendResponse, fallbackBooks);
-            }
-        });
-        
-    });
-    
-    olRequest.on('error', (error) => {
-        console.error('Open Library API error:', error.message);
-        // API 실패 시 더미 데이터 시도
-        tryFallbackData(isbn, sendResponse, fallbackBooks);
-    });
-    
-    olRequest.on('timeout', () => {
-        console.log('Open Library API timeout');
-        olRequest.destroy();
-        tryFallbackData(isbn, sendResponse, fallbackBooks);
-    });
-}
-
-// 더미 데이터 시도 함수
-function tryFallbackData(isbn, sendResponse, fallbackBooks) {
-    if (fallbackBooks[isbn]) {
-        console.log(`ISBN ${isbn}: 더미 데이터 사용`);
-        sendResponse(fallbackBooks[isbn]);
+    // 더미 데이터에서 검색
+    if (dummyBooks[cleanIsbn]) {
+        console.log(`ISBN ${cleanIsbn}: 더미 데이터 반환`);
+        res.json(dummyBooks[cleanIsbn]);
     } else {
-        console.log(`ISBN ${isbn}: 모든 소스에서 찾을 수 없음`);
-        sendResponse({ 
-            error: 'Book not found',
-            message: '해당 ISBN의 도서 정보를 찾을 수 없습니다. 수동으로 입력해주세요.'
-        }, 404);
+        // 더미 데이터에 없는 경우 기본 응답
+        console.log(`ISBN ${cleanIsbn}: 더미 데이터에 없음`);
+        res.json({
+            title: `도서 ${cleanIsbn}`,
+            author: '미상',
+            publishDate: '',
+            pages: '',
+            description: '더미 데이터에 없는 ISBN입니다. 수동으로 입력해주세요.'
+        });
     }
-}
+});
 
 // 정적 파일 서빙
 app.use(express.static(path.join(__dirname)));
