@@ -19,7 +19,7 @@ app.use((req, res, next) => {
     }
 });
 
-// ISBN 검색 API 프록시
+// ISBN 검색 API 프록시 (다중 API 지원)
 app.get('/api/isbn/:isbn', (req, res) => {
     const { isbn } = req.params;
     
@@ -34,8 +34,54 @@ app.get('/api/isbn/:isbn', (req, res) => {
         return res.status(400).json({ error: 'ISBN must be 10 or 13 digits' });
     }
     
-    // Open Library API 호출
-    const url = `https://openlibrary.org/isbn/${cleanIsbn}.json`;
+    // 국립중앙도서관 API 시도
+    const nlApiUrl = `https://www.nl.go.kr/NL/search/openApi/search.do?key=test&detailSearch=true&isbn=${cleanIsbn}&format=json`;
+    
+    https.get(nlApiUrl, (response) => {
+        let data = '';
+        
+        response.on('data', (chunk) => {
+            data += chunk;
+        });
+        
+        response.on('end', () => {
+            try {
+                const nlData = JSON.parse(data);
+                
+                if (nlData && nlData.result && nlData.result.length > 0) {
+                    const book = nlData.result[0];
+                    
+                    const result = {
+                        title: book.title || '',
+                        author: book.author || '',
+                        publishDate: book.pub_date || '',
+                        pages: book.page || '',
+                        description: book.description || ''
+                    };
+                    
+                    return res.json(result);
+                }
+                
+                // 국립중앙도서관에서 찾지 못한 경우 Open Library 시도
+                tryOpenLibrary(cleanIsbn, res);
+                
+            } catch (error) {
+                console.log('NL API parse error:', error.message);
+                // 국립중앙도서관 실패 시 Open Library 시도
+                tryOpenLibrary(cleanIsbn, res);
+            }
+        });
+        
+    }).on('error', (error) => {
+        console.log('NL API error:', error.message);
+        // 국립중앙도서관 실패 시 Open Library 시도
+        tryOpenLibrary(cleanIsbn, res);
+    });
+});
+
+// Open Library API 시도 함수
+function tryOpenLibrary(isbn, res) {
+    const url = `https://openlibrary.org/isbn/${isbn}.json`;
     
     https.get(url, (response) => {
         let data = '';
@@ -49,7 +95,7 @@ app.get('/api/isbn/:isbn', (req, res) => {
                 const bookData = JSON.parse(data);
                 
                 if (!bookData.title) {
-                    return res.status(404).json({ error: 'Book not found' });
+                    return res.status(404).json({ error: 'Book not found in any API' });
                 }
                 
                 // 저자 정보 가져오기
@@ -99,16 +145,16 @@ app.get('/api/isbn/:isbn', (req, res) => {
                 res.json(result);
                 
             } catch (error) {
-                console.error('JSON parse error:', error);
-                res.status(500).json({ error: 'Internal server error' });
+                console.error('Open Library JSON parse error:', error);
+                res.status(500).json({ error: 'Failed to parse book data' });
             }
         });
         
     }).on('error', (error) => {
-        console.error('ISBN search error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        console.error('Open Library API error:', error);
+        res.status(500).json({ error: 'All book APIs failed' });
     });
-});
+}
 
 // 정적 파일 서빙
 app.use(express.static(path.join(__dirname)));
