@@ -26,6 +26,8 @@
   "homepage": "https://github.com/beeper9-source/supabase_mcp#readme",
   "dependencies": {
     "@supabase/mcp-server-supabase": "^0.5.6",
-    "express": "^4.21.2"
+    "axios": "^1.12.2",
+    "express": "^4.21.2",
+    "node-fetch": "^3.3.2"
   }
 }

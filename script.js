@@ -1485,6 +1485,76 @@ function updateClassificationSelect() {
     }
 }
 
+// ISBN으로 도서 정보 자동 입력
+async function fetchBookInfoByISBN() {
+    const isbnInput = document.getElementById('bookIsbn');
+    const isbn = isbnInput.value.trim();
+    
+    if (!isbn) return;
+    
+    // ISBN 형식 검증 (숫자와 하이픈만 허용)
+    if (!/^[\d-]+$/.test(isbn)) {
+        showNotification('ISBN은 숫자와 하이픈(-)만 입력 가능합니다.', 'warning');
+        return;
+    }
+    
+    // 하이픈 제거하여 검색
+    const cleanIsbn = isbn.replace(/-/g, '');
+    
+    if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
+        showNotification('ISBN은 10자리 또는 13자리여야 합니다.', 'warning');
+        return;
+    }
+    
+    try {
+        showLoading(true, '도서 정보를 가져오는 중...');
+        
+        // 서버의 프록시 API를 사용하여 도서 정보 가져오기
+        const response = await fetch(`/api/isbn/${cleanIsbn}`);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'API 요청 실패');
+        }
+        
+        const bookData = await response.json();
+        
+        if (bookData.title) {
+            // 도서 정보 자동 입력
+            document.getElementById('bookTitle').value = bookData.title || '';
+            document.getElementById('bookAuthor').value = bookData.author || '';
+            
+            // 출판일 정보
+            if (bookData.publishDate) {
+                const publishDate = new Date(bookData.publishDate);
+                if (!isNaN(publishDate.getTime())) {
+                    document.getElementById('bookPublishedDate').value = publishDate.toISOString().split('T')[0];
+                }
+            }
+            
+            // 페이지 수
+            if (bookData.pages) {
+                document.getElementById('bookPages').value = bookData.pages;
+            }
+            
+            // 설명
+            if (bookData.description) {
+                document.getElementById('bookDescription').value = bookData.description;
+            }
+            
+            showNotification('도서 정보가 자동으로 입력되었습니다.', 'success');
+        } else {
+            showNotification('해당 ISBN의 도서 정보를 찾을 수 없습니다.', 'warning');
+        }
+        
+    } catch (error) {
+        console.error('ISBN 검색 오류:', error);
+        showNotification(`도서 정보를 가져오는데 실패했습니다: ${error.message}`, 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
 // CSS 애니메이션 추가
 const style = document.createElement('style');
 style.textContent = `

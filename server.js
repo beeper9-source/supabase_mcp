@@ -1,6 +1,10 @@
 const express = require('express');
 const path = require('path');
+const https = require('https');
 const app = express();
+
+// JSON 파싱 미들웨어
+app.use(express.json());
 
 // CORS 설정
 app.use((req, res, next) => {
@@ -13,6 +17,97 @@ app.use((req, res, next) => {
     } else {
         next();
     }
+});
+
+// ISBN 검색 API 프록시
+app.get('/api/isbn/:isbn', (req, res) => {
+    const { isbn } = req.params;
+    
+    // ISBN 형식 검증
+    if (!/^[\d-]+$/.test(isbn)) {
+        return res.status(400).json({ error: 'Invalid ISBN format' });
+    }
+    
+    const cleanIsbn = isbn.replace(/-/g, '');
+    
+    if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
+        return res.status(400).json({ error: 'ISBN must be 10 or 13 digits' });
+    }
+    
+    // Open Library API 호출
+    const url = `https://openlibrary.org/isbn/${cleanIsbn}.json`;
+    
+    https.get(url, (response) => {
+        let data = '';
+        
+        response.on('data', (chunk) => {
+            data += chunk;
+        });
+        
+        response.on('end', async () => {
+            try {
+                const bookData = JSON.parse(data);
+                
+                if (!bookData.title) {
+                    return res.status(404).json({ error: 'Book not found' });
+                }
+                
+                // 저자 정보 가져오기
+                let authorName = '';
+                if (bookData.authors && bookData.authors.length > 0) {
+                    try {
+                        const authorUrl = `https://openlibrary.org${bookData.authors[0].key}.json`;
+                        const authorData = await new Promise((resolve, reject) => {
+                            https.get(authorUrl, (authorResponse) => {
+                                let authorData = '';
+                                authorResponse.on('data', (chunk) => {
+                                    authorData += chunk;
+                                });
+                                authorResponse.on('end', () => {
+                                    try {
+                                        resolve(JSON.parse(authorData));
+                                    } catch (error) {
+                                        reject(error);
+                                    }
+                                });
+                            }).on('error', reject);
+                        });
+                        authorName = authorData.name || '';
+                    } catch (error) {
+                        console.log('Author fetch failed:', error.message);
+                    }
+                }
+                
+                // 응답 데이터 구성
+                const result = {
+                    title: bookData.title || '',
+                    author: authorName,
+                    publishDate: bookData.publish_date || '',
+                    pages: bookData.number_of_pages || '',
+                    description: ''
+                };
+                
+                // 설명 처리
+                if (bookData.description) {
+                    if (typeof bookData.description === 'string') {
+                        result.description = bookData.description;
+                    } else if (bookData.description.value) {
+                        result.description = bookData.description.value;
+                    }
+                }
+                
+                res.json(result);
+                
+            } catch (error) {
+                console.error('JSON parse error:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+        
+    }).on('error', (error) => {
+        console.error('ISBN search error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    });
 });
 
 // 정적 파일 서빙
