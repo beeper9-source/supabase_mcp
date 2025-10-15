@@ -49,20 +49,32 @@ function verifyEmployeeId(inputId) {
 // 추가 보안: 잘못된 시도 횟수 추적
 let failedAttempts = 0;
 
-// 최종수정 시간 업데이트 함수
-function updateLastModified() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-    
-    const formattedTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    const lastModifiedElement = document.getElementById('lastModified');
-    if (lastModifiedElement) {
-        lastModifiedElement.textContent = formattedTime;
+// 최종수정 시간 업데이트 함수 (실제 파일 수정 시간 사용)
+async function updateLastModified() {
+    try {
+        const response = await fetch('/api/last-modified');
+        const data = await response.json();
+        
+        const lastModifiedElement = document.getElementById('lastModified');
+        if (lastModifiedElement) {
+            lastModifiedElement.textContent = data.lastModified;
+        }
+    } catch (error) {
+        console.error('최종수정 시간 가져오기 실패:', error);
+        // 실패 시 현재 시간으로 폴백
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        
+        const formattedTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        const lastModifiedElement = document.getElementById('lastModified');
+        if (lastModifiedElement) {
+            lastModifiedElement.textContent = formattedTime;
+        }
     }
 }
 const MAX_FAILED_ATTEMPTS = 3;

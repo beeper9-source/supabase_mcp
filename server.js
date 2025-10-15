@@ -1,6 +1,6 @@
 const express = require('express');
 const path = require('path');
-const https = require('https');
+const fs = require('fs');
 const app = express();
 
 // JSON 파싱 미들웨어
@@ -19,18 +19,22 @@ app.use((req, res, next) => {
     }
 });
 
-// ISBN 검색 API 프록시 (간단한 더미 데이터 방식)
+// ISBN 검색 API - 순수 더미 데이터만 사용
 app.get('/api/isbn/:isbn', (req, res) => {
     const { isbn } = req.params;
     
-    // ISBN 형식 검증
+    console.log(`ISBN 요청: ${isbn}`);
+    
+    // ISBN 형식 검증 (더 관대한 패턴)
     if (!/^[\d\-]+$/.test(isbn)) {
+        console.log(`잘못된 ISBN 형식: ${isbn}`);
         return res.status(400).json({ error: 'Invalid ISBN format' });
     }
     
     const cleanIsbn = isbn.replace(/-/g, '');
     
     if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
+        console.log(`잘못된 ISBN 길이: ${cleanIsbn.length}`);
         return res.status(400).json({ error: 'ISBN must be 10 or 13 digits' });
     }
     
@@ -90,6 +94,60 @@ app.get('/api/isbn/:isbn', (req, res) => {
     }
 });
 
+// 파일 최종 수정 시간 API
+app.get('/api/last-modified', (req, res) => {
+    try {
+        const files = [
+            'index.html',
+            'script.js', 
+            'styles.css',
+            'server.js',
+            '사용법.md'
+        ];
+        
+        let latestFile = null;
+        let latestTime = 0;
+        
+        files.forEach(fileName => {
+            const filePath = path.join(__dirname, fileName);
+            if (fs.existsSync(filePath)) {
+                const stats = fs.statSync(filePath);
+                if (stats.mtime.getTime() > latestTime) {
+                    latestTime = stats.mtime.getTime();
+                    latestFile = fileName;
+                }
+            }
+        });
+        
+        if (latestFile) {
+            const date = new Date(latestTime);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            
+            const formattedTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+            
+            res.json({
+                lastModified: formattedTime,
+                fileName: latestFile,
+                timestamp: latestTime
+            });
+        } else {
+            res.json({
+                lastModified: '알 수 없음',
+                fileName: 'none',
+                timestamp: 0
+            });
+        }
+    } catch (error) {
+        console.error('Error getting last modified time:', error);
+        res.status(500).json({ error: 'Failed to get last modified time' });
+    }
+});
+
 // 정적 파일 서빙
 app.use(express.static(path.join(__dirname)));
 
@@ -98,8 +156,9 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-const PORT = process.env.PORT || 3000;
+// 서버 시작
+const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`도서관리 시스템이 포트 ${PORT}에서 실행 중입니다.`);
+    console.log(`개인문고관리 시스템이 포트 ${PORT}에서 실행 중입니다.`);
     console.log(`http://localhost:${PORT}에서 접속하세요.`);
 });
