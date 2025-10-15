@@ -1486,6 +1486,12 @@ function updateClassificationSelect() {
 }
 
 // ISBN으로 도서 정보 자동 입력
+// 샘플 도서 정보 가져오기
+function loadSampleBook() {
+    document.getElementById('bookIsbn').value = '9788960543386';
+    fetchBookInfoByISBN();
+}
+
 async function fetchBookInfoByISBN() {
     const isbnInput = document.getElementById('bookIsbn');
     const isbn = isbnInput.value.trim();
@@ -1494,7 +1500,7 @@ async function fetchBookInfoByISBN() {
     
     // ISBN 형식 검증 (숫자와 하이픈만 허용)
     if (!/^[\d-]+$/.test(isbn)) {
-        showNotification('ISBN은 숫자와 하이픈(-)만 입력 가능합니다.', 'warning');
+        showErrorPopup('ISBN 형식 오류', 'ISBN은 숫자와 하이픈(-)만 입력 가능합니다.');
         return;
     }
     
@@ -1502,7 +1508,7 @@ async function fetchBookInfoByISBN() {
     const cleanIsbn = isbn.replace(/-/g, '');
     
     if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
-        showNotification('ISBN은 10자리 또는 13자리여야 합니다.', 'warning');
+        showErrorPopup('ISBN 길이 오류', 'ISBN은 10자리 또는 13자리여야 합니다.');
         return;
     }
     
@@ -1544,14 +1550,91 @@ async function fetchBookInfoByISBN() {
             
             showNotification('도서 정보가 자동으로 입력되었습니다.', 'success');
         } else {
-            showNotification('해당 ISBN의 도서 정보를 찾을 수 없습니다.', 'warning');
+            showErrorPopup('도서 정보 없음', '해당 ISBN의 도서 정보를 찾을 수 없습니다.');
         }
         
     } catch (error) {
         console.error('ISBN 검색 오류:', error);
-        showNotification(`도서 정보를 가져오는데 실패했습니다: ${error.message}`, 'error');
+        showErrorPopup('도서 정보 가져오기 실패', `도서 정보를 가져오는데 실패했습니다: ${error.message}`);
     } finally {
         showLoading(false);
+    }
+}
+
+// 에러 팝업 표시 함수
+function showErrorPopup(title, message) {
+    // 기존 에러 팝업이 있으면 제거
+    const existingPopup = document.getElementById('errorPopup');
+    if (existingPopup) {
+        existingPopup.remove();
+    }
+
+    // 에러 팝업 HTML 생성
+    const popupHTML = `
+        <div id="errorPopup" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        ">
+            <div style="
+                background: white;
+                border-radius: 8px;
+                padding: 20px;
+                max-width: 400px;
+                width: 90%;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            ">
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    margin-bottom: 15px;
+                ">
+                    <div style="
+                        width: 24px;
+                        height: 24px;
+                        background-color: #dc3545;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        margin-right: 10px;
+                    ">
+                        <span style="color: white; font-weight: bold;">!</span>
+                    </div>
+                    <h3 style="margin: 0; color: #dc3545;">${title}</h3>
+                </div>
+                <p style="margin: 0 0 20px 0; color: #333; line-height: 1.5;">${message}</p>
+                <div style="text-align: right;">
+                    <button onclick="closeErrorPopup()" style="
+                        background-color: #dc3545;
+                        color: white;
+                        border: none;
+                        padding: 8px 16px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">확인</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 팝업을 body에 추가
+    document.body.insertAdjacentHTML('beforeend', popupHTML);
+}
+
+// 에러 팝업 닫기 함수
+function closeErrorPopup() {
+    const popup = document.getElementById('errorPopup');
+    if (popup) {
+        popup.remove();
     }
 }
 
