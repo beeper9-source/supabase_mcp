@@ -19,7 +19,7 @@ app.use((req, res, next) => {
     }
 });
 
-// ISBN 검색 API 프록시 (로컬 더미 데이터 사용)
+// ISBN 검색 API 프록시 (외부 API 사용)
 app.get('/api/isbn/:isbn', (req, res) => {
     const { isbn } = req.params;
     
@@ -34,60 +34,127 @@ app.get('/api/isbn/:isbn', (req, res) => {
         return res.status(400).json({ error: 'ISBN must be 10 or 13 digits' });
     }
     
-    // 더미 도서 데이터
-    const dummyBooks = {
-        '9788960543386': {
-            title: '김승옥 단편선',
-            author: '김승옥',
-            publishDate: '2018-01-01',
-            pages: '320',
-            description: '한국 문학의 거장 김승옥의 대표 단편소설들을 엮은 작품집입니다. 현대 한국 사회의 모순과 갈등을 날카롭게 그려낸 작품들로 구성되어 있습니다.'
-        },
-        '9788936434267': {
-            title: '도스토예프스키 단편선',
-            author: '표도르 도스토예프스키',
-            publishDate: '2019-03-15',
-            pages: '450',
-            description: '러시아 문학의 거장 도스토예프스키의 대표 단편소설들을 엮은 작품집입니다. 인간의 내면과 사회적 모순을 깊이 있게 탐구한 작품들입니다.'
-        },
-        '9780134685991': {
-            title: 'Effective TypeScript',
-            author: 'Dan Vanderkam',
-            publishDate: '2019-10-01',
-            pages: '400',
-            description: 'TypeScript를 효과적으로 사용하는 방법을 알려주는 실용적인 가이드입니다. 고급 타입스크립트 기법과 모범 사례를 다룹니다.'
-        },
-        '9788965746663': {
-            title: 'Supabase 실전 가이드',
-            author: '김개발',
-            publishDate: '2023-06-01',
-            pages: '280',
-            description: 'Supabase를 활용한 풀스택 웹 애플리케이션 개발 가이드입니다. 실무에서 바로 사용할 수 있는 예제와 팁을 제공합니다.'
-        },
-        '9788965746664': {
-            title: 'GitHub 활용서',
-            author: '이코딩',
-            publishDate: '2023-08-15',
-            pages: '350',
-            description: 'GitHub를 활용한 협업 개발과 프로젝트 관리에 대한 종합적인 가이드입니다. 팀 개발에 필요한 모든 기능을 다룹니다.'
-        }
-    };
+    // 국립중앙도서관 API 시도
+    const nlApiUrl = `https://www.nl.go.kr/NL/search/openApi/search.do?key=test&detailSearch=true&isbn=${cleanIsbn}&format=json`;
     
-    // 더미 데이터에서 검색
-    if (dummyBooks[cleanIsbn]) {
-        console.log(`ISBN ${cleanIsbn}에 대한 더미 데이터 반환`);
-        res.json(dummyBooks[cleanIsbn]);
-    } else {
-        // 더미 데이터에 없는 경우 기본 응답
-        res.json({
-            title: `도서 ${cleanIsbn}`,
-            author: '미상',
-            publishDate: '',
-            pages: '',
-            description: '더미 데이터에 없는 ISBN입니다. 수동으로 입력해주세요.'
+    https.get(nlApiUrl, (response) => {
+        let data = '';
+        
+        response.on('data', (chunk) => {
+            data += chunk;
         });
-    }
+        
+        response.on('end', () => {
+            try {
+                const nlData = JSON.parse(data);
+                
+                if (nlData && nlData.result && nlData.result.length > 0) {
+                    const book = nlData.result[0];
+                    
+                    const result = {
+                        title: book.title || '',
+                        author: book.author || '',
+                        publishDate: book.pub_date || '',
+                        pages: book.page || '',
+                        description: book.description || ''
+                    };
+                    
+                    return res.json(result);
+                }
+                
+                // 국립중앙도서관에서 찾지 못한 경우 Open Library 시도
+                tryOpenLibrary(cleanIsbn, res);
+                
+            } catch (error) {
+                console.log('NL API parse error:', error.message);
+                // 국립중앙도서관 실패 시 Open Library 시도
+                tryOpenLibrary(cleanIsbn, res);
+            }
+        });
+        
+    }).on('error', (error) => {
+        console.log('NL API error:', error.message);
+        // 국립중앙도서관 실패 시 Open Library 시도
+        tryOpenLibrary(cleanIsbn, res);
+    });
 });
+
+// Open Library API 시도 함수
+function tryOpenLibrary(isbn, res) {
+    const url = `https://openlibrary.org/isbn/${isbn}.json`;
+    
+    https.get(url, (response) => {
+        let data = '';
+        
+        response.on('data', (chunk) => {
+            data += chunk;
+        });
+        
+        response.on('end', async () => {
+            try {
+                const bookData = JSON.parse(data);
+                
+                if (!bookData.title) {
+                    return res.status(404).json({ error: 'Book not found in any API' });
+                }
+                
+                // 저자 정보 가져오기
+                let authorName = '';
+                if (bookData.authors && bookData.authors.length > 0) {
+                    try {
+                        const authorUrl = `https://openlibrary.org${bookData.authors[0].key}.json`;
+                        const authorData = await new Promise((resolve, reject) => {
+                            https.get(authorUrl, (authorResponse) => {
+                                let authorData = '';
+                                authorResponse.on('data', (chunk) => {
+                                    authorData += chunk;
+                                });
+                                authorResponse.on('end', () => {
+                                    try {
+                                        resolve(JSON.parse(authorData));
+                                    } catch (error) {
+                                        reject(error);
+                                    }
+                                });
+                            }).on('error', reject);
+                        });
+                        authorName = authorData.name || '';
+                    } catch (error) {
+                        console.log('Author fetch failed:', error.message);
+                    }
+                }
+                
+                // 응답 데이터 구성
+                const result = {
+                    title: bookData.title || '',
+                    author: authorName,
+                    publishDate: bookData.publish_date || '',
+                    pages: bookData.number_of_pages || '',
+                    description: ''
+                };
+                
+                // 설명 처리
+                if (bookData.description) {
+                    if (typeof bookData.description === 'string') {
+                        result.description = bookData.description;
+                    } else if (bookData.description.value) {
+                        result.description = bookData.description.value;
+                    }
+                }
+                
+                res.json(result);
+                
+            } catch (error) {
+                console.error('Open Library JSON parse error:', error);
+                res.status(500).json({ error: 'Failed to parse book data' });
+            }
+        });
+        
+    }).on('error', (error) => {
+        console.error('Open Library API error:', error);
+        res.status(500).json({ error: 'All book APIs failed' });
+    });
+}
 
 // 정적 파일 서빙
 app.use(express.static(path.join(__dirname)));

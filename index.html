@@ -121,6 +121,13 @@
             </div>
             <form id="bookForm" onsubmit="saveBook(event)">
                 <div class="form-group">
+                    <label for="bookIsbn">ISBN</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="text" id="bookIsbn" placeholder="ISBN을 입력하면 자동으로 정보를 가져옵니다" onblur="fetchBookInfoByISBN()" style="flex: 1;">
+                        <button type="button" onclick="loadSampleBook()" class="btn btn-secondary" style="white-space: nowrap;">샘플 가져오기</button>
+                    </div>
+                </div>
+                <div class="form-group">
                     <label for="bookTitle">도서명 *</label>
                     <input type="text" id="bookTitle" required>
                 </div>
@@ -128,13 +135,6 @@
                     <label for="bookAuthor">저자 *</label>
                     <input type="text" id="bookAuthor" required>
                 </div>
-                        <div class="form-group">
-                            <label for="bookIsbn">ISBN</label>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <input type="text" id="bookIsbn" placeholder="ISBN을 입력하면 자동으로 정보를 가져옵니다" onblur="fetchBookInfoByISBN()" style="flex: 1;">
-                                <button type="button" onclick="loadSampleBook()" class="btn btn-secondary" style="white-space: nowrap;">샘플 가져오기</button>
-                            </div>
-                        </div>
                 <div class="form-group">
                     <label for="bookPublishedDate">출판일</label>
                     <input type="date" id="bookPublishedDate">
