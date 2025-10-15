@@ -31,15 +31,35 @@ body {
     align-items: center;
 }
 
+.header-main {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
 .header h1 {
     color: #2c3e50;
     font-size: 2.5rem;
     font-weight: 700;
+    margin: 0;
 }
 
 .header h1 i {
     color: #3498db;
     margin-right: 15px;
+}
+
+.last-modified {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.last-modified i {
+    color: #95a5a6;
 }
 
 .header-actions {

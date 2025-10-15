@@ -48,6 +48,23 @@ function verifyEmployeeId(inputId) {
 
 // 추가 보안: 잘못된 시도 횟수 추적
 let failedAttempts = 0;
+
+// 최종수정 시간 업데이트 함수
+function updateLastModified() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    
+    const formattedTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    const lastModifiedElement = document.getElementById('lastModified');
+    if (lastModifiedElement) {
+        lastModifiedElement.textContent = formattedTime;
+    }
+}
 const MAX_FAILED_ATTEMPTS = 3;
 const LOCKOUT_TIME = 30000; // 30초
 
@@ -95,6 +112,7 @@ let editingClassificationId = null;
 document.addEventListener('DOMContentLoaded', function() {
     loadLibraries();
     setupEventListeners();
+    updateLastModified(); // 최종수정 시간 초기화
 });
 
 // 분류체계 목록 로드
@@ -564,6 +582,7 @@ async function saveBook(event) {
             'success'
         );
         
+        updateLastModified(); // 최종수정 시간 업데이트
         closeModal();
         loadBooks();
         
@@ -593,6 +612,7 @@ async function deleteBook(libraryId, id) {
         }
         
         showNotification('도서가 삭제되었습니다.', 'success');
+        updateLastModified(); // 최종수정 시간 업데이트
         loadBooks();
         
     } catch (error) {
@@ -1042,6 +1062,7 @@ async function saveLibrary(event) {
             'success'
         );
         
+        updateLastModified(); // 최종수정 시간 업데이트
         closeLibraryModal();
         loadLibraries();
         
@@ -1169,6 +1190,7 @@ async function confirmDeleteLibrary(libraryId) {
         }
         
         showNotification('도서관이 삭제되었습니다.', 'success');
+        updateLastModified(); // 최종수정 시간 업데이트
         
         // 현재 선택된 도서관이 삭제된 경우 첫 번째 도서관 선택
         if (currentLibraryId === libraryId) {
@@ -1399,6 +1421,7 @@ async function saveClassification(event) {
             'success'
         );
         
+        updateLastModified(); // 최종수정 시간 업데이트
         closeClassificationModal();
         await loadClassifications();
         updateClassificationSelect();
@@ -1430,6 +1453,7 @@ async function deleteClassification(id) {
         }
         
         showNotification('분류체계가 삭제되었습니다.', 'success');
+        updateLastModified(); // 최종수정 시간 업데이트
         await loadClassifications();
         updateClassificationSelect();
         updateStats();

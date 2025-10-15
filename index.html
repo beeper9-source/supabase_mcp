@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>도서관리 시스템</title>
+    <title>개인문고관리</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -11,7 +11,12 @@
     <div class="container">
         <!-- 헤더 -->
         <header class="header">
-            <h1><i class="fas fa-book"></i> 도서관리 시스템</h1>
+            <div class="header-main">
+                <h1><i class="fas fa-book"></i> 개인문고관리</h1>
+                <div class="last-modified">
+                    <i class="fas fa-clock"></i> 최종수정: <span id="lastModified"></span>
+                </div>
+            </div>
             <div class="header-actions">
                 <button class="btn btn-primary" onclick="showAddBookModal()">
                     <i class="fas fa-plus"></i> 새 도서 추가
