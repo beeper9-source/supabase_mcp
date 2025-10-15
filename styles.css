@@ -92,6 +92,16 @@ body {
     box-shadow: 0 5px 15px rgba(23, 162, 184, 0.4);
 }
 
+.btn-warning {
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+    color: white;
+}
+
+.btn-warning:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
+}
+
 .btn-outline {
     background: transparent;
     border: 2px solid #3498db;
@@ -350,7 +360,7 @@ body {
     font-weight: 500;
 }
 
-.book-genre {
+.book-classification {
     display: inline-block;
     background: linear-gradient(135deg, #3498db, #2980b9);
     color: white;
@@ -506,6 +516,89 @@ body {
 .library-selector-item.current {
     border-color: #27ae60;
     background: linear-gradient(135deg, #f8fff8, #e8f5e8);
+}
+
+/* 분류체계 카드 스타일 */
+.classification-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.classification-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    border-color: #f39c12;
+}
+
+.classification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.classification-name {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.classification-description {
+    color: #7f8c8d;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.classification-info {
+    margin-bottom: 15px;
+}
+
+.classification-info p {
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: #555;
+}
+
+.classification-info strong {
+    color: #2c3e50;
+}
+
+.classification-subcategories {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+
+.classification-subcategories span {
+    display: inline-block;
+    background: #3498db;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    margin: 2px;
+}
+
+.classification-examples {
+    background: #fff3cd;
+    padding: 10px;
+    border-radius: 8px;
+    border-left: 4px solid #f39c12;
+    font-style: italic;
+    color: #856404;
+}
+
+.classification-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
 }
 
 /* 모달 스타일 */

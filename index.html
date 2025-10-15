@@ -19,6 +19,9 @@
                 <button class="btn btn-info" onclick="showLibraryModal()">
                     <i class="fas fa-building"></i> 도서관 관리
                 </button>
+                <button class="btn btn-warning" onclick="showClassificationModal()">
+                    <i class="fas fa-tags"></i> 분류체계 관리
+                </button>
                 <button class="btn btn-secondary" onclick="exportData()">
                     <i class="fas fa-download"></i> 데이터 내보내기
                 </button>
@@ -42,19 +45,12 @@
         <div class="search-section">
             <div class="search-box">
                 <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" placeholder="도서명, 저자, 장르로 검색..." onkeyup="searchBooks()">
+                <input type="text" id="searchInput" placeholder="도서명, 저자, 분류체계로 검색..." onkeyup="searchBooks()">
             </div>
             <div class="filters">
-                <select id="genreFilter" onchange="filterBooks()">
-                    <option value="">모든 장르</option>
-                    <option value="판타지">판타지</option>
-                    <option value="소설">소설</option>
-                    <option value="SF">SF</option>
-                    <option value="스릴러">스릴러</option>
-                    <option value="디스토피아">디스토피아</option>
-                    <option value="희곡">희곡</option>
-                    <option value="알레고리">알레고리</option>
-                    <option value="마술적 사실주의">마술적 사실주의</option>
+                <select id="classificationFilter" onchange="filterBooks()">
+                    <option value="">모든 분류체계</option>
+                    <!-- 분류체계 옵션이 동적으로 로드됩니다 -->
                 </select>
                 <select id="sortBy" onchange="sortBooks()">
                     <option value="title">도서명순</option>
@@ -77,8 +73,8 @@
             <div class="stat-card">
                 <i class="fas fa-layer-group"></i>
                 <div class="stat-info">
-                    <h3 id="totalGenres">0</h3>
-                    <p>장르 수</p>
+                    <h3 id="totalClassifications">0</h3>
+                    <p>분류체계 수</p>
                 </div>
             </div>
             <div class="stat-card">
@@ -141,17 +137,10 @@
                     <input type="date" id="bookPublishedDate">
                 </div>
                 <div class="form-group">
-                    <label for="bookGenre">장르</label>
-                    <select id="bookGenre">
-                        <option value="">장르 선택</option>
-                        <option value="판타지">판타지</option>
-                        <option value="소설">소설</option>
-                        <option value="SF">SF</option>
-                        <option value="스릴러">스릴러</option>
-                        <option value="디스토피아">디스토피아</option>
-                        <option value="희곡">희곡</option>
-                        <option value="알레고리">알레고리</option>
-                        <option value="마술적 사실주의">마술적 사실주의</option>
+                    <label for="bookClassification">분류체계 *</label>
+                    <select id="bookClassification" required>
+                        <option value="">분류체계 선택</option>
+                        <!-- 분류체계 옵션이 동적으로 로드됩니다 -->
                     </select>
                 </div>
                 <div class="form-group">
@@ -266,6 +255,63 @@
             <div class="modal-body">
                 <div id="librarySelectorList">
                     <!-- 도서관 선택 목록이 여기에 표시됩니다 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 분류체계 관리 모달 -->
+    <div id="classificationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="classificationModalTitle">분류체계 관리</h2>
+                <span class="close" onclick="closeClassificationModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="classification-tabs">
+                    <button class="tab-btn active" onclick="showClassificationTab('list')" id="classificationListTabBtn">
+                        <i class="fas fa-list"></i> 분류체계 목록
+                    </button>
+                    <button class="tab-btn" onclick="showClassificationTab('add')" id="classificationAddTabBtn">
+                        <i class="fas fa-plus"></i> 새 분류 추가
+                    </button>
+                </div>
+                
+                <!-- 분류체계 목록 탭 -->
+                <div id="classificationListTab" class="tab-content active">
+                    <div id="classificationsList">
+                        <!-- 분류체계 목록이 여기에 표시됩니다 -->
+                    </div>
+                </div>
+                
+                <!-- 새 분류 추가 탭 -->
+                <div id="classificationAddTab" class="tab-content">
+                    <form id="classificationForm" onsubmit="saveClassification(event)">
+                        <div class="form-group">
+                            <label for="classificationName">분류명 *</label>
+                            <input type="text" id="classificationName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="classificationDescription">설명</label>
+                            <textarea id="classificationDescription" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="classificationSubcategories">하위 분류 (쉼표로 구분)</label>
+                            <input type="text" id="classificationSubcategories" placeholder="예: 한국문학, 세계문학, 장편소설">
+                        </div>
+                        <div class="form-group">
+                            <label for="classificationExamples">예시 도서</label>
+                            <textarea id="classificationExamples" rows="2" placeholder="예: 김승옥, 도스토예프스키, 카프카 등"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="classificationOrder">표시 순서</label>
+                            <input type="number" id="classificationOrder" min="1" max="100" value="1">
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" onclick="closeClassificationModal()">취소</button>
+                            <button type="submit" class="btn btn-primary">저장</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

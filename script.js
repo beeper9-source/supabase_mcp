@@ -83,17 +83,48 @@ function verifyEmployeeIdSecure(inputId) {
 let books = [];
 let filteredBooks = [];
 let libraries = [];
+let classifications = [];
 let currentLibraryId = null;
 let currentView = 'grid';
 let editingBookId = null;
 let editingBookLibraryId = null;
 let editingLibraryId = null;
+let editingClassificationId = null;
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
     loadLibraries();
     setupEventListeners();
 });
+
+// 분류체계 목록 로드
+async function loadClassifications() {
+    if (!currentLibraryId) {
+        classifications = [];
+        return;
+    }
+    
+    try {
+        const { data, error } = await supabase
+            .from('book_classifications')
+            .select('*')
+            .eq('library_id', currentLibraryId)
+            .eq('is_active', true)
+            .order('display_order');
+
+        if (error) {
+            console.error('Error loading classifications:', error);
+            showNotification('분류체계 목록을 불러오는데 실패했습니다.', 'error');
+            return;
+        }
+
+        classifications = data || [];
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('분류체계 목록을 불러오는데 실패했습니다.', 'error');
+    }
+}
 
 // 이벤트 리스너 설정
 function setupEventListeners() {
@@ -139,6 +170,7 @@ async function loadLibraries() {
         if (libraries.length > 0 && !currentLibraryId) {
             currentLibraryId = libraries[0].id;
             updateCurrentLibraryDisplay();
+            loadClassifications();
             loadBooks();
         } else if (libraries.length === 0) {
             showNotification('도서관이 없습니다. 먼저 도서관을 추가해주세요.', 'warning');
@@ -190,6 +222,7 @@ async function loadBooks() {
         filteredBooks = [...books];
         renderBooks();
         updateStats();
+        updateClassificationSelect();
         showLoading(false);
         
     } catch (error) {
@@ -229,6 +262,10 @@ function createBookCard(book) {
         `<span style="color: #27ae60;">보유권수: ${book.copies}권</span>` : 
         `<span style="color: #e74c3c;">보유권수 없음</span>`;
 
+    // 분류체계 정보 찾기
+    const classification = classifications.find(c => c.id === book.classification_id);
+    const classificationName = classification ? `[${classification.id}] ${classification.category_name}` : '미분류';
+
     return `
         <div class="book-card ${currentView === 'list' ? 'list-view' : ''}" onclick="showBookDetail('${book.library_id}', '${book.id}')">
             <div class="book-header">
@@ -237,7 +274,7 @@ function createBookCard(book) {
                     <div class="book-title">${escapeHtml(book.title)}</div>
                     <div class="book-author">${escapeHtml(book.author)}</div>
                 </div>
-                <div class="book-genre">${escapeHtml(book.genre || '미분류')}</div>
+                <div class="book-classification">${escapeHtml(classificationName)}</div>
             </div>
             
             <div class="book-info">
@@ -275,30 +312,32 @@ function createBookCard(book) {
 function searchBooks() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     
-    filteredBooks = books.filter(book => 
-        book.title.toLowerCase().includes(searchTerm) ||
-        book.author.toLowerCase().includes(searchTerm) ||
-        (book.genre && book.genre.toLowerCase().includes(searchTerm)) ||
-        (book.isbn && book.isbn.toLowerCase().includes(searchTerm))
-    );
+    filteredBooks = books.filter(book => {
+        const classification = classifications.find(c => c.id === book.classification_id);
+        const classificationName = classification ? classification.category_name : '';
+        
+        return book.title.toLowerCase().includes(searchTerm) ||
+               book.author.toLowerCase().includes(searchTerm) ||
+               (book.isbn && book.isbn.toLowerCase().includes(searchTerm)) ||
+               classificationName.toLowerCase().includes(searchTerm);
+    });
     
     renderBooks();
 }
 
 // 도서 필터링
 function filterBooks() {
-    const genreFilter = document.getElementById('genreFilter').value;
+    const classificationFilter = document.getElementById('classificationFilter').value;
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     
     filteredBooks = books.filter(book => {
-        const matchesGenre = !genreFilter || book.genre === genreFilter;
+        const matchesClassification = !classificationFilter || book.classification_id == classificationFilter;
         const matchesSearch = !searchTerm || 
             book.title.toLowerCase().includes(searchTerm) ||
             book.author.toLowerCase().includes(searchTerm) ||
-            (book.genre && book.genre.toLowerCase().includes(searchTerm)) ||
             (book.isbn && book.isbn.toLowerCase().includes(searchTerm));
         
-        return matchesGenre && matchesSearch;
+        return matchesClassification && matchesSearch;
     });
     
     renderBooks();
@@ -349,13 +388,13 @@ function toggleView(view) {
 // 통계 업데이트
 function updateStats() {
     const totalBooks = books.length;
-    const totalGenres = new Set(books.map(book => book.genre).filter(Boolean)).size;
+    const totalClassifications = classifications.length;
     const totalStock = books.reduce((sum, book) => sum + (book.copies || 0), 0);
     const avgPrice = books.length > 0 ? 
         Math.round(books.reduce((sum, book) => sum + (book.price || 0), 0) / books.length) : 0;
     
     document.getElementById('totalBooks').textContent = totalBooks;
-    document.getElementById('totalGenres').textContent = totalGenres;
+    document.getElementById('totalClassifications').textContent = totalClassifications;
     document.getElementById('totalStock').textContent = totalStock;
     document.getElementById('avgPrice').textContent = new Intl.NumberFormat('ko-KR').format(avgPrice) + '원';
 }
@@ -373,13 +412,22 @@ function showAddBookModal() {
     document.getElementById('bookForm').reset();
     document.getElementById('bookLanguage').value = 'Korean';
     document.getElementById('bookStock').value = '1';
+    updateClassificationSelect();
     document.getElementById('bookModal').style.display = 'block';
 }
 
 // 도서 수정
 function editBook(libraryId, id) {
-    const book = books.find(b => b.library_id === libraryId && b.id === id);
-    if (!book) return;
+    // 데이터 타입 변환하여 검색
+    const book = books.find(b => 
+        b.library_id === parseInt(libraryId) && 
+        b.id === String(id)
+    );
+    
+    if (!book) {
+        console.error('Book not found');
+        return;
+    }
     
     editingBookId = id;
     editingBookLibraryId = libraryId;
@@ -390,13 +438,14 @@ function editBook(libraryId, id) {
     document.getElementById('bookAuthor').value = book.author || '';
     document.getElementById('bookIsbn').value = book.isbn || '';
     document.getElementById('bookPublishedDate').value = book.published_date || '';
-    document.getElementById('bookGenre').value = book.genre || '';
+    document.getElementById('bookClassification').value = book.classification_id || '';
     document.getElementById('bookPages').value = book.pages || '';
     document.getElementById('bookLanguage').value = book.language || 'Korean';
     document.getElementById('bookDescription').value = book.description || '';
     document.getElementById('bookPrice').value = book.price || '';
     document.getElementById('bookStock').value = book.copies || 1;
     
+    updateClassificationSelect();
     document.getElementById('bookModal').style.display = 'block';
 }
 
@@ -409,12 +458,12 @@ async function saveBook(event) {
     const author = document.getElementById('bookAuthor').value.trim();
     const isbn = document.getElementById('bookIsbn').value.trim();
     const publishedDate = document.getElementById('bookPublishedDate').value;
-    const genre = document.getElementById('bookGenre').value;
     const pages = document.getElementById('bookPages').value;
     const language = document.getElementById('bookLanguage').value.trim();
     const description = document.getElementById('bookDescription').value.trim();
     const price = document.getElementById('bookPrice').value;
     const stock = document.getElementById('bookStock').value;
+    const classificationId = document.getElementById('bookClassification').value;
     
     // 필수 필드 검증
     if (!title) {
@@ -425,6 +474,11 @@ async function saveBook(event) {
     if (!author) {
         showNotification('저자를 입력해주세요.', 'error');
         document.getElementById('bookAuthor').focus();
+        return;
+    }
+    if (!classificationId) {
+        showNotification('분류체계를 선택해주세요.', 'error');
+        document.getElementById('bookClassification').focus();
         return;
     }
     
@@ -459,13 +513,13 @@ async function saveBook(event) {
         author: author,
         isbn: isbn || null,
         published_date: publishedDate || null,
-        genre: genre || null,
         pages: pages ? parseInt(pages) : null,
         language: language || 'Korean',
         description: description || null,
         price: price ? parseFloat(price) : null,
         copies: stock ? parseInt(stock) : 1,
-        library_id: currentLibraryId
+        library_id: currentLibraryId,
+        classification_id: classificationId
         // id는 데이터베이스 트리거에서 자동 생성됨
     };
     
@@ -529,8 +583,8 @@ async function deleteBook(libraryId, id) {
         const { error } = await supabase
             .from('books')
             .delete()
-            .eq('library_id', libraryId)
-            .eq('id', id);
+            .eq('library_id', parseInt(libraryId))
+            .eq('id', String(id));
         
         if (error) {
             console.error('Error deleting book:', error);
@@ -549,7 +603,10 @@ async function deleteBook(libraryId, id) {
 
 // 도서 상세 정보 표시
 function showBookDetail(libraryId, id) {
-    const book = books.find(b => b.library_id === libraryId && b.id === id);
+    const book = books.find(b => 
+        b.library_id === parseInt(libraryId) && 
+        b.id === String(id)
+    );
     if (!book) return;
     
     const publishedDate = book.published_date ? 
@@ -561,6 +618,10 @@ function showBookDetail(libraryId, id) {
     const createdDate = new Date(book.created_at).toLocaleDateString('ko-KR');
     const updatedDate = new Date(book.updated_at).toLocaleDateString('ko-KR');
     
+    // 분류체계 정보 찾기
+    const classification = classifications.find(c => c.id === book.classification_id);
+    const classificationName = classification ? `[${classification.id}] ${classification.category_name}` : '미분류';
+    
     document.getElementById('detailContent').innerHTML = `
         <div style="padding: 30px;">
             <div style="text-align: center; margin-bottom: 30px;">
@@ -570,7 +631,7 @@ function showBookDetail(libraryId, id) {
                 <h1 style="color: #2c3e50; margin-bottom: 10px;">${escapeHtml(book.title)}</h1>
                 <h2 style="color: #7f8c8d; font-weight: 400;">${escapeHtml(book.author)}</h2>
                 <div style="margin-top: 15px;">
-                    <span class="book-genre">${escapeHtml(book.genre || '미분류')}</span>
+                    <span class="book-classification">${escapeHtml(classificationName)}</span>
                 </div>
             </div>
             
@@ -601,6 +662,10 @@ function showBookDetail(libraryId, id) {
                         ${escapeHtml(book.isbn)}
                     </div>
                 ` : ''}
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <strong>분류체계</strong><br>
+                    ${escapeHtml(classificationName)}
+                </div>
             </div>
             
             ${book.description ? `
@@ -733,6 +798,26 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// 안전한 JSON 파싱 헬퍼 함수
+function safeParseJSON(jsonString, fallback = []) {
+    if (!jsonString) return fallback;
+    
+    if (Array.isArray(jsonString)) {
+        return jsonString;
+    }
+    
+    if (typeof jsonString === 'string') {
+        try {
+            return JSON.parse(jsonString);
+        } catch (e) {
+            console.warn('JSON 파싱 실패, 쉼표로 분리된 문자열로 처리:', jsonString);
+            return jsonString.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        }
+    }
+    
+    return fallback;
+}
+
 // 도서관 관련 함수들
 
 // 현재 도서관 표시 업데이트
@@ -845,6 +930,7 @@ async function selectLibrary(libraryId) {
     currentLibraryId = libraryId;
     updateCurrentLibraryDisplay();
     closeLibraryModal();
+    await loadClassifications();
     loadBooks();
     showNotification('도서관이 변경되었습니다.', 'success');
 }
@@ -1115,6 +1201,288 @@ function resetLibraryForm() {
     editingLibraryId = null;
     // 모달 제목도 기본값으로 리셋
     document.getElementById('libraryModalTitle').textContent = '도서관 관리';
+}
+
+// 분류체계 관리 모달 표시
+function showClassificationModal() {
+    if (!currentLibraryId) {
+        showNotification('먼저 도서관을 선택해주세요.', 'warning');
+        showLibrarySelector();
+        return;
+    }
+    
+    editingClassificationId = null;
+    document.getElementById('classificationModalTitle').textContent = '분류체계 관리';
+    document.getElementById('classificationForm').reset();
+    document.getElementById('classificationOrder').value = '1';
+    document.getElementById('classificationModal').style.display = 'block';
+    loadClassificationsList();
+}
+
+// 분류체계 모달 닫기
+function closeClassificationModal() {
+    document.getElementById('classificationModal').style.display = 'none';
+    editingClassificationId = null;
+}
+
+// 분류체계 탭 전환
+function showClassificationTab(tab) {
+    // 모든 탭 버튼과 콘텐츠 비활성화
+    document.querySelectorAll('.classification-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('#classificationModal .tab-content').forEach(content => content.classList.remove('active'));
+    
+    // 선택된 탭 활성화
+    if (tab === 'list') {
+        document.getElementById('classificationListTabBtn').classList.add('active');
+        document.getElementById('classificationListTab').classList.add('active');
+        loadClassificationsList();
+    } else if (tab === 'add') {
+        document.getElementById('classificationAddTabBtn').classList.add('active');
+        document.getElementById('classificationAddTab').classList.add('active');
+        // 수정 모드가 아닐 때만 폼 리셋
+        if (!editingClassificationId) {
+            resetClassificationForm();
+        }
+    }
+}
+
+// 분류체계 목록 로드 및 표시
+async function loadClassificationsList() {
+    const container = document.getElementById('classificationsList');
+    
+    if (classifications.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+                <i class="fas fa-tags" style="font-size: 3rem; margin-bottom: 20px; opacity: 0.5;"></i>
+                <h3>분류체계가 없습니다</h3>
+                <p>새로운 분류체계를 추가해보세요!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = classifications.map(classification => createClassificationCard(classification)).join('');
+}
+
+// 분류체계 카드 생성
+function createClassificationCard(classification) {
+    const subcategories = safeParseJSON(classification.subcategories, []);
+    
+    return `
+        <div class="classification-card">
+            <div class="classification-header">
+                <div>
+                    <div class="classification-id" style="background: #e3f2fd; color: #1976d2; padding: 4px 8px; border-radius: 12px; display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 600;">
+                        ID: ${classification.id}
+                    </div>
+                    <div class="classification-name">${escapeHtml(classification.category_name)}</div>
+                    ${classification.description ? `<div class="classification-description">${escapeHtml(classification.description)}</div>` : ''}
+                </div>
+                <div style="color: #7f8c8d; font-size: 12px;">
+                    순서: ${classification.display_order}
+                </div>
+            </div>
+            
+            ${subcategories.length > 0 ? `
+                <div class="classification-subcategories">
+                    <strong>하위 분류:</strong><br>
+                    ${subcategories.map(sub => `<span>${escapeHtml(sub)}</span>`).join('')}
+                </div>
+            ` : ''}
+            
+            ${classification.examples ? `
+                <div class="classification-examples">
+                    <strong>예시:</strong> ${escapeHtml(classification.examples)}
+                </div>
+            ` : ''}
+            
+            <div class="classification-actions">
+                <button class="btn btn-sm btn-secondary" onclick="editClassification(${classification.id})">
+                    <i class="fas fa-edit"></i> 수정
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteClassification(${classification.id})">
+                    <i class="fas fa-trash"></i> 삭제
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// 분류체계 수정
+function editClassification(id) {
+    const classification = classifications.find(c => c.id === id);
+    if (!classification) return;
+    
+    editingClassificationId = id;
+    
+    // 모달 제목 업데이트
+    document.getElementById('classificationModalTitle').textContent = '분류체계 수정';
+    
+    // 추가 탭으로 전환
+    showClassificationTab('add');
+    
+    // 폼에 기존 데이터 채우기
+    document.getElementById('classificationName').value = classification.category_name || '';
+    document.getElementById('classificationDescription').value = classification.description || '';
+    
+    // subcategories 처리
+    const subcategories = safeParseJSON(classification.subcategories, []);
+    document.getElementById('classificationSubcategories').value = subcategories.join(', ');
+    
+    document.getElementById('classificationExamples').value = classification.examples || '';
+    document.getElementById('classificationOrder').value = classification.display_order || 1;
+}
+
+// 분류체계 저장
+async function saveClassification(event) {
+    event.preventDefault();
+    
+    const displayOrder = parseInt(document.getElementById('classificationOrder').value) || 1;
+    
+    const formData = {
+        category_name: document.getElementById('classificationName').value.trim(),
+        description: document.getElementById('classificationDescription').value.trim(),
+        subcategories: document.getElementById('classificationSubcategories').value.trim(),
+        examples: document.getElementById('classificationExamples').value.trim(),
+        display_order: displayOrder,
+        library_id: currentLibraryId
+    };
+    
+    // 새 분류체계 추가 시 ID 계산 (표시순서 기반으로 100단위 증가)
+    if (!editingClassificationId) {
+        const nextId = displayOrder * 100; // 표시순서 * 100으로 ID 계산
+        formData.id = nextId;
+    }
+    
+    // 필수 필드 검증
+    if (!formData.category_name) {
+        showNotification('분류명을 입력해주세요.', 'error');
+        document.getElementById('classificationName').focus();
+        return;
+    }
+    
+    // 하위 분류를 JSON 배열로 변환
+    if (formData.subcategories) {
+        const subcategoriesArray = formData.subcategories.split(',')
+            .map(sub => sub.trim())
+            .filter(sub => sub.length > 0);
+        formData.subcategories = JSON.stringify(subcategoriesArray);
+    } else {
+        formData.subcategories = JSON.stringify([]);
+    }
+    
+    try {
+        let result;
+        
+        if (editingClassificationId) {
+            // 수정
+            result = await supabase
+                .from('book_classifications')
+                .update(formData)
+                .eq('library_id', currentLibraryId)
+                .eq('id', editingClassificationId);
+        } else {
+            // 추가
+            result = await supabase
+                .from('book_classifications')
+                .insert([formData]);
+        }
+        
+        if (result.error) {
+            console.error('Error saving classification:', result.error);
+            showNotification('분류체계 저장에 실패했습니다.', 'error');
+            return;
+        }
+        
+        showNotification(
+            editingClassificationId ? '분류체계가 수정되었습니다.' : '새 분류체계가 추가되었습니다.', 
+            'success'
+        );
+        
+        closeClassificationModal();
+        await loadClassifications();
+        updateClassificationSelect();
+        updateStats();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('분류체계 저장에 실패했습니다.', 'error');
+    }
+}
+
+// 분류체계 삭제
+async function deleteClassification(id) {
+    if (!confirm('정말로 이 분류체계를 삭제하시겠습니까?')) {
+        return;
+    }
+    
+    try {
+        const { error } = await supabase
+            .from('book_classifications')
+            .update({ is_active: false })
+            .eq('library_id', currentLibraryId)
+            .eq('id', id);
+        
+        if (error) {
+            console.error('Error deleting classification:', error);
+            showNotification('분류체계 삭제에 실패했습니다.', 'error');
+            return;
+        }
+        
+        showNotification('분류체계가 삭제되었습니다.', 'success');
+        await loadClassifications();
+        updateClassificationSelect();
+        updateStats();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showNotification('분류체계 삭제에 실패했습니다.', 'error');
+    }
+}
+
+// 분류체계 폼 리셋
+function resetClassificationForm() {
+    document.getElementById('classificationForm').reset();
+    editingClassificationId = null;
+    document.getElementById('classificationOrder').value = '1';
+    // 모달 제목도 기본값으로 리셋
+    document.getElementById('classificationModalTitle').textContent = '분류체계 관리';
+}
+
+// 분류체계 선택 옵션 업데이트
+function updateClassificationSelect() {
+    const select = document.getElementById('bookClassification');
+    const filterSelect = document.getElementById('classificationFilter');
+    
+    if (select) {
+        // 기존 옵션 제거 (첫 번째 기본 옵션 제외)
+        while (select.children.length > 1) {
+            select.removeChild(select.lastChild);
+        }
+        
+        // 새로운 옵션 추가
+        classifications.forEach(classification => {
+            const option = document.createElement('option');
+            option.value = classification.id;
+            option.textContent = `[${classification.id}] ${classification.category_name}`;
+            select.appendChild(option);
+        });
+    }
+    
+    if (filterSelect) {
+        // 기존 옵션 제거 (첫 번째 기본 옵션 제외)
+        while (filterSelect.children.length > 1) {
+            filterSelect.removeChild(filterSelect.lastChild);
+        }
+        
+        // 새로운 옵션 추가
+        classifications.forEach(classification => {
+            const option = document.createElement('option');
+            option.value = classification.id;
+            option.textContent = `[${classification.id}] ${classification.category_name}`;
+            filterSelect.appendChild(option);
+        });
+    }
 }
 
 // CSS 애니메이션 추가
