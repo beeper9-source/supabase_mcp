@@ -1498,8 +1498,8 @@ async function fetchBookInfoByISBN() {
     
     if (!isbn) return;
     
-    // ISBN 형식 검증 (숫자와 하이픈만 허용)
-    if (!/^[\d-]+$/.test(isbn)) {
+    // ISBN 형식 검증 (더 관대한 패턴)
+    if (!/^[\d\-]+$/.test(isbn)) {
         showErrorPopup('ISBN 형식 오류', 'ISBN은 숫자와 하이픈(-)만 입력 가능합니다.');
         return;
     }

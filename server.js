@@ -22,16 +22,29 @@ app.use((req, res, next) => {
 // ISBN 검색 API 프록시 (하이브리드: 외부 API + 내장 더미 데이터)
 app.get('/api/isbn/:isbn', (req, res) => {
     const { isbn } = req.params;
+    let responseSent = false;
     
-    // ISBN 형식 검증
-    if (!/^[\d-]+$/.test(isbn)) {
-        return res.status(400).json({ error: 'Invalid ISBN format' });
+    // 응답 전송 함수 (중복 전송 방지)
+    const sendResponse = (data, statusCode = 200) => {
+        if (!responseSent) {
+            responseSent = true;
+            if (statusCode === 200) {
+                res.json(data);
+            } else {
+                res.status(statusCode).json(data);
+            }
+        }
+    };
+    
+    // ISBN 형식 검증 (더 관대한 패턴)
+    if (!/^[\d\-]+$/.test(isbn)) {
+        return sendResponse({ error: 'Invalid ISBN format' }, 400);
     }
     
     const cleanIsbn = isbn.replace(/-/g, '');
     
     if (cleanIsbn.length !== 10 && cleanIsbn.length !== 13) {
-        return res.status(400).json({ error: 'ISBN must be 10 or 13 digits' });
+        return sendResponse({ error: 'ISBN must be 10 or 13 digits' }, 400);
     }
     
     // 내장 더미 데이터 (백업용)
@@ -74,7 +87,7 @@ app.get('/api/isbn/:isbn', (req, res) => {
     };
     
     // 외부 API 시도 (타임아웃 설정)
-    const timeout = 3000; // 3초 타임아웃
+    const timeout = 2000; // 2초 타임아웃 (더 빠른 응답)
     
     // 국립중앙도서관 API 시도
     const nlApiUrl = `https://www.nl.go.kr/NL/search/openApi/search.do?key=test&detailSearch=true&isbn=${cleanIsbn}&format=json`;
@@ -102,16 +115,16 @@ app.get('/api/isbn/:isbn', (req, res) => {
                     };
                     
                     console.log(`ISBN ${cleanIsbn}: 국립중앙도서관 API 성공`);
-                    return res.json(result);
+                    return sendResponse(result);
                 }
                 
                 // 국립중앙도서관에서 찾지 못한 경우 Open Library 시도
-                tryOpenLibrary(cleanIsbn, res, fallbackBooks);
+                tryOpenLibrary(cleanIsbn, sendResponse, fallbackBooks);
                 
             } catch (error) {
                 console.log('NL API parse error:', error.message);
                 // 국립중앙도서관 실패 시 Open Library 시도
-                tryOpenLibrary(cleanIsbn, res, fallbackBooks);
+                tryOpenLibrary(cleanIsbn, sendResponse, fallbackBooks);
             }
         });
         
@@ -120,20 +133,20 @@ app.get('/api/isbn/:isbn', (req, res) => {
     nlRequest.on('error', (error) => {
         console.log('NL API error:', error.message);
         // 국립중앙도서관 실패 시 Open Library 시도
-        tryOpenLibrary(cleanIsbn, res, fallbackBooks);
+        tryOpenLibrary(cleanIsbn, sendResponse, fallbackBooks);
     });
     
     nlRequest.on('timeout', () => {
         console.log('NL API timeout');
         nlRequest.destroy();
-        tryOpenLibrary(cleanIsbn, res, fallbackBooks);
+        tryOpenLibrary(cleanIsbn, sendResponse, fallbackBooks);
     });
 });
 
 // Open Library API 시도 함수
-function tryOpenLibrary(isbn, res, fallbackBooks) {
+function tryOpenLibrary(isbn, sendResponse, fallbackBooks) {
     const url = `https://openlibrary.org/isbn/${isbn}.json`;
-    const timeout = 3000; // 3초 타임아웃
+    const timeout = 2000; // 2초 타임아웃
     
     const olRequest = https.get(url, { timeout }, (response) => {
         let data = '';
@@ -148,16 +161,16 @@ function tryOpenLibrary(isbn, res, fallbackBooks) {
                 
                 if (!bookData.title) {
                     // Open Library에서도 찾지 못한 경우 더미 데이터 시도
-                    return tryFallbackData(isbn, res, fallbackBooks);
+                    return tryFallbackData(isbn, sendResponse, fallbackBooks);
                 }
                 
-                // 저자 정보 가져오기
+                // 저자 정보 가져오기 (간소화)
                 let authorName = '';
                 if (bookData.authors && bookData.authors.length > 0) {
                     try {
                         const authorUrl = `https://openlibrary.org${bookData.authors[0].key}.json`;
                         const authorData = await new Promise((resolve, reject) => {
-                            const authorRequest = https.get(authorUrl, { timeout: 2000 }, (authorResponse) => {
+                            const authorRequest = https.get(authorUrl, { timeout: 1500 }, (authorResponse) => {
                                 let authorData = '';
                                 authorResponse.on('data', (chunk) => {
                                     authorData += chunk;
@@ -201,12 +214,12 @@ function tryOpenLibrary(isbn, res, fallbackBooks) {
                 }
                 
                 console.log(`ISBN ${isbn}: Open Library API 성공`);
-                res.json(result);
+                sendResponse(result);
                 
             } catch (error) {
                 console.error('Open Library JSON parse error:', error);
                 // 파싱 실패 시 더미 데이터 시도
-                tryFallbackData(isbn, res, fallbackBooks);
+                tryFallbackData(isbn, sendResponse, fallbackBooks);
             }
         });
         
@@ -215,27 +228,27 @@ function tryOpenLibrary(isbn, res, fallbackBooks) {
     olRequest.on('error', (error) => {
         console.error('Open Library API error:', error.message);
         // API 실패 시 더미 데이터 시도
-        tryFallbackData(isbn, res, fallbackBooks);
+        tryFallbackData(isbn, sendResponse, fallbackBooks);
     });
     
     olRequest.on('timeout', () => {
         console.log('Open Library API timeout');
         olRequest.destroy();
-        tryFallbackData(isbn, res, fallbackBooks);
+        tryFallbackData(isbn, sendResponse, fallbackBooks);
     });
 }
 
 // 더미 데이터 시도 함수
-function tryFallbackData(isbn, res, fallbackBooks) {
+function tryFallbackData(isbn, sendResponse, fallbackBooks) {
     if (fallbackBooks[isbn]) {
         console.log(`ISBN ${isbn}: 더미 데이터 사용`);
-        res.json(fallbackBooks[isbn]);
+        sendResponse(fallbackBooks[isbn]);
     } else {
         console.log(`ISBN ${isbn}: 모든 소스에서 찾을 수 없음`);
-        res.status(404).json({ 
+        sendResponse({ 
             error: 'Book not found',
             message: '해당 ISBN의 도서 정보를 찾을 수 없습니다. 수동으로 입력해주세요.'
-        });
+        }, 404);
     }
 }
 
