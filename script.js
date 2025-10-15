@@ -121,10 +121,10 @@ let editingLibraryId = null;
 let editingClassificationId = null;
 
 // 페이지 로드 시 초기화
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     loadLibraries();
     setupEventListeners();
-    updateLastModified(); // 최종수정 시간 초기화
+    await updateLastModified(); // 페이지 로드 시에만 소스 파일 수정 시간 표시
 });
 
 // 분류체계 목록 로드
@@ -594,7 +594,6 @@ async function saveBook(event) {
             'success'
         );
         
-        updateLastModified(); // 최종수정 시간 업데이트
         closeModal();
         loadBooks();
         
@@ -624,7 +623,6 @@ async function deleteBook(libraryId, id) {
         }
         
         showNotification('도서가 삭제되었습니다.', 'success');
-        updateLastModified(); // 최종수정 시간 업데이트
         loadBooks();
         
     } catch (error) {
@@ -1074,7 +1072,6 @@ async function saveLibrary(event) {
             'success'
         );
         
-        updateLastModified(); // 최종수정 시간 업데이트
         closeLibraryModal();
         loadLibraries();
         
@@ -1202,7 +1199,6 @@ async function confirmDeleteLibrary(libraryId) {
         }
         
         showNotification('도서관이 삭제되었습니다.', 'success');
-        updateLastModified(); // 최종수정 시간 업데이트
         
         // 현재 선택된 도서관이 삭제된 경우 첫 번째 도서관 선택
         if (currentLibraryId === libraryId) {
@@ -1433,7 +1429,6 @@ async function saveClassification(event) {
             'success'
         );
         
-        updateLastModified(); // 최종수정 시간 업데이트
         closeClassificationModal();
         await loadClassifications();
         updateClassificationSelect();
@@ -1465,7 +1460,6 @@ async function deleteClassification(id) {
         }
         
         showNotification('분류체계가 삭제되었습니다.', 'success');
-        updateLastModified(); // 최종수정 시간 업데이트
         await loadClassifications();
         updateClassificationSelect();
         updateStats();
